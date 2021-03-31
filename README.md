@@ -5,6 +5,17 @@
 For now it only prints the generated regular expressions and found files/dirs.
 
 
+# Installation
+
+`git clone https://github.com/micouy/se.git`
+
+`cd se`
+
+Then you can use unstable options to specify where to put the binary.
+
+`cargo build -Z unstable-options --out-dir DESTINATION --release`
+
+
 # Example
 
 ```
