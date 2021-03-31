@@ -58,7 +58,8 @@ $ se te fo iz
 
 # Future development
 
-* Enter matched directory.
-* Match only directories.
-* Wildcard args (`.`) to enforce a specific number of components.
-* Use the first arg as a starting directory.
+[x] Use the first arg as a starting directory.
+[ ] Enter matched directory.
+[ ] Match only directories.
+[ ] Wildcard args (`.`) to enforce a specific number of components.
+[ ] Use `clap`.

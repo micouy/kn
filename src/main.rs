@@ -10,10 +10,21 @@ use std::{
 pub struct EntryNode<'a>(pub PathBuf, pub &'a [Regex]);
 
 fn main() {
-    let args = parse_args(std::env::args().skip(1)).unwrap();
+    let mut args = std::env::args().skip(1).collect::<Vec<_>>();
+
+	let (entry_path, args) = if AsRef::<Path>::as_ref(&args[0]).is_dir() {
+    	let entry_path = args.remove(0);
+		(PathBuf::from(entry_path), args)
+	} else {
+    	(std::env::current_dir().unwrap(), args)
+
+	};
+	let args = parse_args(args.into_iter()).unwrap();
+	let first_level = prepare_first_level(entry_path, &args);
     println!("{:?}", args);
 
-    let mut levels: Vec<Vec<EntryNode>> = vec![prepare_first_level(".", &args)];
+
+    let mut levels: Vec<Vec<EntryNode>> = vec![first_level];
     let mut found: Vec<PathBuf> = vec![];
 
     'search: loop {
