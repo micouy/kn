@@ -1,4 +1,4 @@
-# `se` - cd by matching parts of path
+# `se` - cd by matching slices of path
 
 `se` is an alternative to `cd`. It matches args against each file's path's components in order. It doesn't track frecency or any other statistics.
 
@@ -59,7 +59,7 @@ $ se te fo iz
 # Future development
 
 - [x] Use the first arg as a starting directory.
+- [x] Use `clap`.
 - [ ] Enter matched directory.
 - [ ] Match only directories.
 - [ ] Wildcard args (`.`) to enforce a specific number of components.
-- [ ] Use `clap`.

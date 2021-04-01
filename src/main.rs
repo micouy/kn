@@ -1,3 +1,4 @@
+use clap::{App, Arg, AppSettings};
 use regex::Regex;
 use std::{
     convert::AsRef,
@@ -10,40 +11,64 @@ use std::{
 pub struct EntryNode<'a>(pub PathBuf, pub &'a [Regex]);
 
 fn main() {
-    let mut args = std::env::args().skip(1).collect::<Vec<_>>();
+    let matches = App::new(env!("CARGO_BIN_NAME"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .about(env!("CARGO_PKG_DESCRIPTION"))
+        // add dots at the end of messages
+        .help_message("Prints help information.")
+        .version_message("Prints version information.")
+        .setting(AppSettings::AllowMissingPositional)
+        .setting(AppSettings::DontCollapseArgsInUsage)
+        .setting(AppSettings::ColoredHelp)
+        .arg(
+            Arg::with_name("SLICES")
+                .help("Slices of path to be matched. If the first arg is a valid path, search begins there.")
+                .index(1)
+                .required(true)
+                .multiple(true),
+        )
+        .get_matches();
 
-	let (entry_path, args) = if AsRef::<Path>::as_ref(&args[0]).is_dir() {
-    	let entry_path = args.remove(0);
-		(PathBuf::from(entry_path), args)
+    let mut args = matches.values_of_lossy("SLICES").unwrap();
+
+    let (entry_path, args) = if AsRef::<Path>::as_ref(&args[0]).is_dir() {
+        let entry_path = args.remove(0);
+
+        (PathBuf::from(entry_path), args)
+    } else {
+        (std::env::current_dir().unwrap(), args)
+    };
+
+	if args.is_empty() {
+        println!("no slices, cd to: {:?}", entry_path);
 	} else {
-    	(std::env::current_dir().unwrap(), args)
-
-	};
-	let args = parse_args(args.into_iter()).unwrap();
-	let first_level = prepare_first_level(entry_path, &args);
-    println!("{:?}", args);
+        let args = parse_args(args.into_iter()).unwrap();
+        let first_level = prepare_first_level(entry_path, &args);
+        println!("slices: {:?}", args);
 
 
-    let mut levels: Vec<Vec<EntryNode>> = vec![first_level];
-    let mut found: Vec<PathBuf> = vec![];
+        let mut levels: Vec<Vec<EntryNode>> = vec![first_level];
+        let mut found: Vec<PathBuf> = vec![];
 
-    'search: loop {
-        let entries = levels.last().unwrap();
-        let mut new_level = vec![];
+        'search: loop {
+            let entries = levels.last().unwrap();
+            let mut new_level = vec![];
 
-        if entries.is_empty() || !found.is_empty() {
-            // either nothing left to search or no need to search.
-            break 'search;
+            if entries.is_empty() || !found.is_empty() {
+                // either nothing left to search or no need to search.
+                break 'search;
+            }
+
+            for entry in entries {
+                handle_entry(entry, &mut found, &mut new_level);
+            }
+
+            levels.push(new_level);
         }
 
-        for entry in entries {
-            handle_entry(entry, &mut found, &mut new_level);
-        }
-
-        levels.push(new_level);
-    }
-
-    println!("{:?}", found);
+        println!("found: {:?}", found);
+	}
 }
 
 /// Generate regular expressions from provided args.

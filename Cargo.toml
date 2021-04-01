@@ -1,6 +1,6 @@
 [package]
 name = "se"
-description = "cd by matching parts of path"
+description = "cd by matching slices of path"
 version = "0.1.0"
 authors = ["micouy <m.powierza@tutanota.com>"]
 edition = "2018"
@@ -9,3 +9,4 @@ edition = "2018"
 
 [dependencies]
 regex = "1.4"
+clap = "2.33"
