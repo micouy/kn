@@ -1,7 +1,5 @@
 # `kn` */n/*
 
-navigate by matching slices of path
-
 `kn` is an alternative to `cd`. It matches args against each file's path's components in order. It doesn't track frecency or any other statistics.
 
 
@@ -21,7 +19,7 @@ Put this line in your `config.fish`:
 
 `_kn init fish | source`
 
-After launching a new fish instance or reloading the config with `source YOUR_FISH_CONFIG_PATH` you'll be able to use the `kn` command.
+After launching a new `fish` instance or reloading the config with `source YOUR_FISH_CONFIG_PATH` you'll be able to use the `kn` command.
 
 
 # Example
