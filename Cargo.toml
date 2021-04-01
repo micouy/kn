@@ -1,11 +1,15 @@
 [package]
 name = "se"
-description = "cd by matching slices of path"
+description = "cd alternative - navigate by matching slices of path"
 version = "0.1.0"
 authors = ["micouy <m.powierza@tutanota.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "_se"
+path = "src/main.rs"
 
 [dependencies]
 regex = "1.4"

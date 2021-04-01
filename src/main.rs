@@ -1,9 +1,13 @@
-use clap::{App, Arg, AppSettings};
+#![feature(exact_size_is_empty)]
+
+use clap::{App, AppSettings, Arg, SubCommand};
 use regex::Regex;
 use std::{
     convert::AsRef,
     fs::{read_dir, DirEntry},
+    io::Write,
     path::{Path, PathBuf},
+    process::exit,
 };
 
 
@@ -15,38 +19,68 @@ fn main() {
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
-        // add dots at the end of messages
+        // Add dots at the end of messages.
         .help_message("Prints help information.")
         .version_message("Prints version information.")
-        .setting(AppSettings::AllowMissingPositional)
-        .setting(AppSettings::DontCollapseArgsInUsage)
         .setting(AppSettings::ColoredHelp)
-        .arg(
-            Arg::with_name("SLICES")
-                .help("Slices of path to be matched. If the first arg is a valid path, search begins there.")
-                .index(1)
-                .required(true)
-                .multiple(true),
+        .setting(AppSettings::SubcommandRequired)
+        .subcommand(
+            SubCommand::with_name("init")
+                .help("Get init script for your shell.")
+                .arg(
+                    Arg::with_name("shell")
+                        .possible_values(&["fish"])
+                        .required(true),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("query")
+                .setting(AppSettings::TrailingVarArg)
+                .help("Query directory matching given slices.")
+                .arg(
+                    Arg::with_name("start-dir")
+                        .long("start-dir")
+                        .help("Where to begin the search.")
+                        .required(false)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("SLICES")
+                        .help("Slices of path to be matched.")
+                        .index(1)
+                        .multiple(true)
+                        .required_unless("start-dir"),
+                ),
         )
         .get_matches();
 
-    let mut args = matches.values_of_lossy("SLICES").unwrap();
+    if let Some(ref matches) = matches.subcommand_matches("init") {
+        let shell = matches.value_of("shell").unwrap();
 
-    let (entry_path, args) = if AsRef::<Path>::as_ref(&args[0]).is_dir() {
-        let entry_path = args.remove(0);
+        match shell {
+            "fish" => print!(include_str!("../init/se.fish")),
+            _ => {}
+        }
 
-        (PathBuf::from(entry_path), args)
-    } else {
-        (std::env::current_dir().unwrap(), args)
-    };
+        std::io::stdout().flush().unwrap();
+    } else if let Some(ref matches) = matches.subcommand_matches("query") {
+        let args = matches
+            .values_of("SLICES")
+            .unwrap_or_else(clap::Values::default);
+        let entry_path = matches
+            .value_of("start-dir")
+            .map(|start_dir| PathBuf::from(&*start_dir))
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap();
 
-	if args.is_empty() {
-        println!("no slices, cd to: {:?}", entry_path);
-	} else {
+        if args.is_empty() {
+            print!("{}", entry_path.display());
+            exit(0);
+        }
+
         let args = parse_args(args.into_iter()).unwrap();
-        let first_level = prepare_first_level(entry_path, &args);
-        println!("slices: {:?}", args);
-
+        let first_level =
+            prepare_first_level(&entry_path, &args).unwrap_or_else(Vec::new);
 
         let mut levels: Vec<Vec<EntryNode>> = vec![first_level];
         let mut found: Vec<PathBuf> = vec![];
@@ -56,7 +90,7 @@ fn main() {
             let mut new_level = vec![];
 
             if entries.is_empty() || !found.is_empty() {
-                // either nothing left to search or no need to search.
+                // Either nothing left to search or no need to search.
                 break 'search;
             }
 
@@ -67,14 +101,22 @@ fn main() {
             levels.push(new_level);
         }
 
-        println!("found: {:?}", found);
-	}
+        if let Some(first) = found.get(0) {
+            // For now just return one path (kinda random). What to do instead?
+            print!("{}", first.display());
+            exit(0);
+        } else {
+            // Do nothing? TODO: Compare with zoxide.
+            eprintln!("nothing found");
+            exit(1);
+        }
+    }
 }
 
 /// Generate regular expressions from provided args.
-pub fn parse_args<A>(args: A) -> Result<Vec<Regex>, String>
+pub fn parse_args<'a, A>(args: A) -> Result<Vec<Regex>, String>
 where
-    A: Iterator<Item = String>,
+    A: Iterator<Item = &'a str>,
 {
     let sanitizer = Regex::new("^[[:alnum:]]+$").unwrap();
     let arg_patterns = args
@@ -114,13 +156,18 @@ where
 pub fn prepare_first_level<'a, P>(
     path: P,
     args: &'a [Regex],
-) -> Vec<EntryNode<'a>>
+) -> Option<Vec<EntryNode<'a>>>
 where
     P: AsRef<Path>,
 {
-    let entries: Vec<DirEntry> =
-        read_dir(path).unwrap().filter_map(|res| res.ok()).collect();
-    let arg = &args[0];
+    let entries: Vec<DirEntry> = read_dir(path)
+        .unwrap()
+        .filter_map(|res| res.ok())
+        .filter(|entry| {
+            entry.file_type().map(|meta| meta.is_dir()).unwrap_or(false)
+        })
+        .collect();
+    let arg = args.get(0)?;
     let mut level = vec![];
 
     for entry in entries {
@@ -133,7 +180,7 @@ where
         }
     }
 
-    level
+    Some(level)
 }
 
 /// Either add entry to found entries or add its contents to the next level.
@@ -142,21 +189,31 @@ pub fn handle_entry<'a>(
     found: &'_ mut Vec<PathBuf>,
     new_level: &'_ mut Vec<EntryNode<'a>>,
 ) {
-    // wrapper to enable the `?` operator
+    // Wrapper to enable the `?` operator.
     let mut inner = || -> Result<(), std::io::Error> {
         match args_left {
             [] => {
-                // no args to match left for this path.
-                // add it to found.
-                found.push(path.clone());
+                // No args to match left for this path.
+                // Add it to found.
+
+                // Last check.
+                if path.is_dir() {
+                    found.push(path.clone());
+                }
             }
             [first_arg, ..] => {
                 let read_dir = path
                     .read_dir()?
                     .filter_map(|res| res.ok())
+                    .filter(|entry| {
+                        entry
+                            .file_type()
+                            .map(|meta| meta.is_dir())
+                            .unwrap_or(false)
+                    })
                     .map(|child| child.path());
                 let children = read_dir.map(|child| {
-                    // if possible, consume the first arg left
+                    // If possible, consume the first arg left.
                     if matches(&child, first_arg) {
                         EntryNode(child, &args_left[1..])
                     } else {

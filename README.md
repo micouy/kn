@@ -1,19 +1,25 @@
-# `se` - cd by matching slices of path
+# `se` - navigate by matching slices of path
 
 `se` is an alternative to `cd`. It matches args against each file's path's components in order. It doesn't track frecency or any other statistics.
 
-For now it only prints the generated regular expressions and found files/dirs.
-
 
 # Installation
+
+The project is in it's alpha stage. For now it only works with `fish` shell. To install, follow the instructions:
 
 `git clone https://github.com/micouy/se.git`
 
 `cd se`
 
-Then you can use unstable options to specify where to put the binary.
+Put the binary in a folder that is in `PATH` so that it can be accessed by the script:
 
 `cargo build -Z unstable-options --out-dir DESTINATION --release`
+
+Put this line in your `config.fish`:
+
+`_se init fish | source`
+
+After launching a new fish instance or reloading the config with `source YOUR_FISH_CONFIG_PATH` you'll be able to use the `se` command.
 
 
 # Example
@@ -28,12 +34,10 @@ test-dir
    └── buzz
 ```
 
-Jump to `te[st-dir]/fo[o]/[b]iz[z]`.
+Jump to `tes[t-dir]/fo[o]/[b]iz[z]`.
 
 ```
-$ se te fo iz
-[^.*te.*$, ^.*fo.*$, ^.*iz.*$]
-["./test-dir/foo/bizz"]
+$ se tes fo iz
 ```
 
 
@@ -60,6 +64,7 @@ $ se te fo iz
 
 - [x] Use the first arg as a starting directory.
 - [x] Use `clap`.
-- [ ] Enter matched directory.
-- [ ] Match only directories.
-- [ ] Wildcard args (`.`) to enforce a specific number of components.
+- [x] Enter matched directory.
+- [x] Match only directories.
+- [ ] Use slashes instead of spaces. This will allow the user to enforce a specific number of components.
+- [ ] Add `--help` to `se` function. (How?)
