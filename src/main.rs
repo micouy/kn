@@ -58,7 +58,7 @@ fn main() {
         let shell = matches.value_of("shell").unwrap();
 
         match shell {
-            "fish" => print!(include_str!("../init/se.fish")),
+            "fish" => print!(include_str!("../init/kn.fish")),
             _ => {}
         }
 
