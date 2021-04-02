@@ -60,11 +60,17 @@ $ kn tes fo iz
   `kn foo baz` **will not** match `baz/foo` but it **will** match `foo/baz`.
 
 
-# Future development
+# TODO
 
 - [x] Use the first arg as a starting directory.
 - [x] Use `clap`.
 - [x] Enter matched directory.
 - [x] Match only directories.
+- [x] Move logic from `kn.fish` to the binary.
 - [ ] Use slashes instead of spaces. This will allow the user to enforce a specific number of components.
 - [ ] Add `--help` to `se` function. (How?)
+- [ ] Compare slices with `String::windows` instead of matching regex? Constructing regex from user's input seems hacky, even if it's validated.
+- [ ] Make `kn` somewhat interactive. Tab could confirm the path `kn` has found so far and the search could begin from that location. That would narrow down the search. Is that possible with `fish`?
+- [ ] Config:
+  * Max space between slices. With space 2 `kn a b` would match `a/x/x/b` but not `a/x/x/x/b`.
+  * Strict mode. When the wildcard slices are implemented it will be possible to match the components at exact positions, not at any position.

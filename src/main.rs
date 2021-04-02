@@ -2,6 +2,8 @@
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use regex::Regex;
+use thiserror::Error;
+
 use std::{
     convert::AsRef,
     fs::{read_dir, DirEntry},
@@ -14,7 +16,34 @@ use std::{
 /// A container for an entry and args left to match.
 pub struct EntryNode<'a>(pub PathBuf, pub &'a [Regex]);
 
-fn main() {
+/// `kn` error.
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Internal error at {file}:{line}. Cause: {cause}. If you see this, contact the dev.")]
+    DevError {
+        line: u32,
+        file: &'static str,
+        cause: &'static str,
+    },
+    #[error(
+        "Invalid slice. Slices should only contain alphanumeric characters."
+    )]
+    InvalidSlice,
+    #[error("{0}")]
+    IO(#[from] std::io::Error),
+}
+
+macro_rules! dev_err {
+    ($cause:expr) => {
+        Error::DevError {
+            line: line!(),
+            file: file!(),
+            cause: $cause,
+        }
+    };
+}
+
+fn main() -> Result<(), Error> {
     let matches = App::new(env!("CARGO_BIN_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -36,14 +65,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("query")
                 .setting(AppSettings::TrailingVarArg)
-                .help("Query directory matching given slices.")
-                .arg(
-                    Arg::with_name("start-dir")
-                        .long("start-dir")
-                        .help("Where to begin the search.")
-                        .required(false)
-                        .takes_value(true),
-                )
+                .help("Query directory matching given slices. If the first slice is a valid dir path, the search begins there.")
                 .arg(
                     Arg::with_name("SLICES")
                         .help("Slices of path to be matched.")
@@ -55,51 +77,31 @@ fn main() {
         .get_matches();
 
     if let Some(ref matches) = matches.subcommand_matches("init") {
-        let shell = matches.value_of("shell").unwrap();
+        let shell = matches
+            .value_of("shell")
+            .ok_or(dev_err!("absent required `clap` arg"))?;
 
         match shell {
             "fish" => print!(include_str!("../init/kn.fish")),
             _ => {}
         }
 
-        std::io::stdout().flush().unwrap();
+        std::io::stdout().flush()?;
     } else if let Some(ref matches) = matches.subcommand_matches("query") {
         let args = matches
             .values_of("SLICES")
-            .unwrap_or_else(clap::Values::default);
-        let entry_path = matches
-            .value_of("start-dir")
-            .map(|start_dir| PathBuf::from(&*start_dir))
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap();
+            .ok_or(dev_err!("absent required `clap` arg"))?;
 
-        if args.is_empty() {
-            print!("{}", entry_path.display());
+        let (start_dir, slices) = parse_args(args.into_iter())?;
+
+        if slices.is_empty() {
+            print!("{}", start_dir.display());
             exit(0);
         }
 
-        let args = parse_args(args.into_iter()).unwrap();
         let first_level =
-            prepare_first_level(&entry_path, &args).unwrap_or_else(Vec::new);
-
-        let mut levels: Vec<Vec<EntryNode>> = vec![first_level];
-        let mut found: Vec<PathBuf> = vec![];
-
-        'search: loop {
-            let entries = levels.last().unwrap();
-            let mut new_level = vec![];
-
-            if entries.is_empty() || !found.is_empty() {
-                // Either nothing left to search or no need to search.
-                break 'search;
-            }
-
-            for entry in entries {
-                handle_entry(entry, &mut found, &mut new_level);
-            }
-
-            levels.push(new_level);
-        }
+            prepare_first_level(&start_dir, &slices).unwrap_or_else(Vec::new);
+        let found = find_paths(first_level);
 
         if let Some(first) = found.get(0) {
             // For now just return one path (kinda random). What to do instead?
@@ -111,20 +113,59 @@ fn main() {
             exit(1);
         }
     }
+
+    Ok(())
+}
+
+/// Find paths matching slices, beginning search at `start_dir`.
+pub fn find_paths<'a>(first_level: Vec<EntryNode<'a>>) -> Vec<PathBuf> {
+    let mut levels: Vec<Vec<EntryNode>> = vec![first_level];
+    let mut found: Vec<PathBuf> = vec![];
+
+    'search: loop {
+        let entries = levels.last().unwrap();
+        let mut new_level = vec![];
+
+        if entries.is_empty() || !found.is_empty() {
+            // Either nothing left to search or no need to search.
+            break 'search;
+        }
+
+        for entry in entries {
+            handle_entry(entry, &mut found, &mut new_level);
+        }
+
+        levels.push(new_level);
+    }
+
+    return found;
 }
 
 /// Generate regular expressions from provided args.
-pub fn parse_args<'a, A>(args: A) -> Result<Vec<Regex>, String>
+pub fn parse_args<'a, A>(args: A) -> Result<(PathBuf, Vec<Regex>), Error>
 where
     A: Iterator<Item = &'a str>,
 {
-    let sanitizer = Regex::new("^[[:alnum:]]+$").unwrap();
+    let mut args = args.peekable();
+    if args.peek().is_none() {
+        return Err(dev_err!("empty args"));
+    }
+
+    // If the first arg is a valid dir path, remove it from
+    // the list of slices begin the search there.
+    let start_dir = args
+        .next_if(|first| AsRef::<Path>::as_ref(first).is_dir())
+        .map(|start_dir| Ok(PathBuf::from(start_dir)))
+        .unwrap_or_else(std::env::current_dir)?;
+
+    // Check if the slices contain alphanumeric characters.
+    let validator = Regex::new("^[[:alnum:]]+$").unwrap();
     let arg_patterns = args
         .map(|arg| {
-            if sanitizer.is_match(&arg) {
+            if validator.is_match(&arg) {
                 Ok(format!("^.*{}.*$", arg))
             } else {
-                Err("nieładny string".to_string())
+                Err(Error::InvalidSlice)
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -132,9 +173,9 @@ where
         .iter()
         .map(|arg_pattern| Regex::new(arg_pattern))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| format!("{}", err));
+        .map_err(|_| dev_err!("regex creation"))?;
 
-    args
+    Ok((start_dir, args))
 }
 
 /// Check if the last component of the path matches the regular expression.
@@ -162,7 +203,7 @@ where
 {
     let entries: Vec<DirEntry> = read_dir(path)
         .unwrap()
-        .filter_map(|res| res.ok())
+        .filter_map(|res| res.ok()) // Ignore entires that cannot be accessed.
         .filter(|entry| {
             entry.file_type().map(|meta| meta.is_dir()).unwrap_or(false)
         })
