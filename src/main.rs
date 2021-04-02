@@ -1,10 +1,11 @@
-#![feature(exact_size_is_empty)]
+#![feature(exact_size_is_empty, box_syntax)]
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use regex::Regex;
 use thiserror::Error;
 
 use std::{
+    collections::VecDeque,
     convert::AsRef,
     fs::{read_dir, DirEntry},
     io::Write,
@@ -13,8 +14,81 @@ use std::{
 };
 
 
+/// A slice of path.
+pub enum PathSlice {
+    /// A slice of path that must be matched right after the previous one.
+    Glued(Regex),
+    /// A slice of path that can be matched a number of components after the previous one.
+    Loose(Regex),
+}
+
+/// A result of digging one level further down the file tree.
+pub enum DigResult<'a> {
+    /// Add path to fully matched paths.
+    FullMatch,
+    /// End search down that path.
+    DeadEnd,
+    /// Continue search. Contains all possible paths of traversal from the node.
+    Continue(Box<dyn Iterator<Item = EntryNode<'a>> + 'a>),
+}
+
 /// A container for an entry and args left to match.
-pub struct EntryNode<'a>(pub PathBuf, pub &'a [Regex]);
+pub struct EntryNode<'a>(pub DirEntry, pub &'a [PathSlice]);
+
+impl<'a> EntryNode<'a> {
+    /// Dig one level further down the file tree.
+    pub fn dig_deeper<'c>(&self) -> DigResult<'a> {
+        let comp = self.0.file_name();
+        let comp: &str = &comp.to_string_lossy();
+
+        use DigResult::*;
+        let whole = self.1;
+
+        match whole {
+            [] => FullMatch,
+            [PathSlice::Glued(re), rest @ ..] =>
+                if re.is_match(comp) {
+                    match rest {
+                        [_, ..] => Continue(self.prepare_children(rest)),
+                        [] => FullMatch,
+                    }
+                } else {
+                    DeadEnd
+                },
+            [PathSlice::Loose(re), rest @ ..] =>
+                if re.is_match(comp) {
+                    match rest {
+                        [_, ..] => {
+                            // Continue
+                            Continue(self.prepare_children(rest))
+                        }
+                        [] => FullMatch,
+                    }
+                } else {
+                    Continue(self.prepare_children(whole))
+                },
+        }
+    }
+
+    fn prepare_children(
+        &self,
+        slices_left: &'a [PathSlice],
+    ) -> Box<dyn Iterator<Item = EntryNode<'a>> + 'a> {
+        let read_dir = match self.0.path().read_dir() {
+            Ok(read_dir) => read_dir,
+            _ => return box std::iter::empty(),
+        };
+
+        let children = read_dir
+            .filter_map(|res| res.ok())
+            .filter(|entry| {
+                entry.file_type().map(|meta| meta.is_dir()).unwrap_or(false)
+            })
+            .map(move |child_entry| EntryNode(child_entry, slices_left));
+
+        box children
+    }
+}
 
 /// `kn` error.
 #[derive(Debug, Error)]
@@ -71,7 +145,6 @@ fn main() -> Result<(), Error> {
                         .help("Slices of path to be matched.")
                         .index(1)
                         .multiple(true)
-                        .required_unless("start-dir"),
                 ),
         )
         .get_matches();
@@ -100,11 +173,11 @@ fn main() -> Result<(), Error> {
         }
 
         let first_level =
-            prepare_first_level(&start_dir, &slices).unwrap_or_else(Vec::new);
+            prepare_first_level(&start_dir, slices.as_slice()).unwrap_or_else(|_| VecDeque::new());
         let found = find_paths(first_level);
 
         if let Some(first) = found.get(0) {
-            // For now just return one path (kinda random). What to do instead?
+            // For now just return the first path found (kinda random). What to do instead?
             print!("{}", first.display());
             exit(0);
         } else {
@@ -118,31 +191,28 @@ fn main() -> Result<(), Error> {
 }
 
 /// Find paths matching slices, beginning search at `start_dir`.
-pub fn find_paths<'a>(first_level: Vec<EntryNode<'a>>) -> Vec<PathBuf> {
-    let mut levels: Vec<Vec<EntryNode>> = vec![first_level];
+pub fn find_paths<'a>(mut entries: VecDeque<EntryNode<'a>>) -> Vec<PathBuf> {
+    // TODO: Use finding depth to get all findings with the same depth
+    // and then compare the findings to return the best match (how?).
+    let _finding_depth: Option<u32> = None;
     let mut found: Vec<PathBuf> = vec![];
 
-    'search: loop {
-        let entries = levels.last().unwrap();
-        let mut new_level = vec![];
+    'entries: while let Some(entry) = entries.pop_front() {
+        if !found.is_empty() { break 'entries; }
 
-        if entries.is_empty() || !found.is_empty() {
-            // Either nothing left to search or no need to search.
-            break 'search;
+        use DigResult::*;
+        match entry.dig_deeper() {
+            FullMatch => found.push(entry.0.path()),
+            DeadEnd => { /* do nothing */ },
+            Continue(children) => entries.extend(children),
         }
-
-        for entry in entries {
-            handle_entry(entry, &mut found, &mut new_level);
-        }
-
-        levels.push(new_level);
     }
 
     return found;
 }
 
 /// Generate regular expressions from provided args.
-pub fn parse_args<'a, A>(args: A) -> Result<(PathBuf, Vec<Regex>), Error>
+pub fn parse_args<'a, A>(args: A) -> Result<(PathBuf, Vec<PathSlice>), Error>
 where
     A: Iterator<Item = &'a str>,
 {
@@ -171,103 +241,32 @@ where
         .collect::<Result<Vec<_>, _>>()?;
     let args = arg_patterns
         .iter()
-        .map(|arg_pattern| Regex::new(arg_pattern))
+        .map(|arg_pattern| {
+            Regex::new(arg_pattern).map(|re| PathSlice::Loose(re))
+        })
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| dev_err!("regex creation"))?;
 
     Ok((start_dir, args))
 }
 
-/// Check if the last component of the path matches the regular expression.
-pub fn matches<P>(path: P, re: &Regex) -> bool
-where
-    P: AsRef<Path>,
-{
-    path.as_ref()
-        .file_name()
-        .map(|os_str| {
-            let lossy = os_str.to_string_lossy();
-
-            re.is_match(&lossy)
-        })
-        .unwrap_or(false)
-}
-
-/// Generate the first level of [`EntryNode`](crate::EntryNode)s.
+/// Prepare the first level of [`EntryNode`](crate::EntryNode)s.
 pub fn prepare_first_level<'a, P>(
     path: P,
-    args: &'a [Regex],
-) -> Option<Vec<EntryNode<'a>>>
+    args: &'a [PathSlice],
+) -> Result<VecDeque<EntryNode<'a>>, Error>
 where
     P: AsRef<Path>,
 {
-    let entries: Vec<DirEntry> = read_dir(path)
-        .unwrap()
+    let first_level = read_dir(path)?
         .filter_map(|res| res.ok()) // Ignore entires that cannot be accessed.
         .filter(|entry| {
             entry.file_type().map(|meta| meta.is_dir()).unwrap_or(false)
         })
-        .collect();
-    let arg = args.get(0)?;
-    let mut level = vec![];
+        .map(|entry| {
+            EntryNode(entry, args) // TODO: Add field `level` with value 0.
+        })
+        .collect::<VecDeque<_>>();
 
-    for entry in entries {
-        let path = entry.path();
-
-        if matches(&path, arg) {
-            level.push(EntryNode(path, &args[1..]));
-        } else {
-            level.push(EntryNode(path, &args[..]));
-        }
-    }
-
-    Some(level)
-}
-
-/// Either add entry to found entries or add its contents to the next level.
-pub fn handle_entry<'a>(
-    EntryNode(path, args_left): &'_ EntryNode<'a>,
-    found: &'_ mut Vec<PathBuf>,
-    new_level: &'_ mut Vec<EntryNode<'a>>,
-) {
-    // Wrapper to enable the `?` operator.
-    let mut inner = || -> Result<(), std::io::Error> {
-        match args_left {
-            [] => {
-                // No args to match left for this path.
-                // Add it to found.
-
-                // Last check.
-                if path.is_dir() {
-                    found.push(path.clone());
-                }
-            }
-            [first_arg, ..] => {
-                let read_dir = path
-                    .read_dir()?
-                    .filter_map(|res| res.ok())
-                    .filter(|entry| {
-                        entry
-                            .file_type()
-                            .map(|meta| meta.is_dir())
-                            .unwrap_or(false)
-                    })
-                    .map(|child| child.path());
-                let children = read_dir.map(|child| {
-                    // If possible, consume the first arg left.
-                    if matches(&child, first_arg) {
-                        EntryNode(child, &args_left[1..])
-                    } else {
-                        EntryNode(child, &args_left[..])
-                    }
-                });
-
-                new_level.extend(children);
-            }
-        }
-
-        Ok(())
-    };
-
-    let _ = inner();
+    Ok(first_level)
 }
