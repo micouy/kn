@@ -13,10 +13,12 @@ function kn
         cd -
     else
         # otherwise, query _kn
-        
-        set -l __kn_result (command _kn query $argv)
 
-        and if test -d $__kn_result
+        # set RUST_LOG to 0 explicitly
+        # hacky but will do for now
+        set -l __kn_result (begin; set -x RUST_LOG 0; command _kn query $argv; end)
+
+        and if test -d "$__kn_result"
             cd $__kn_result
         end
     end

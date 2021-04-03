@@ -67,17 +67,23 @@ $ kn tes fo iz
 - [x] Enter matched directory.
 - [x] Match only directories.
 - [x] Move logic from `kn.fish` to the binary.
+- [ ] Add debug info.
 - [ ] Use slashes to enforce "glued" slices (slices that must be matched one right after the other). Use spaces to allow for "loose" slices (slices that can be matched a number of components apart from each other).
   - [x] Add `PathSlice::Glued` and `PathSlice::Loose`. For now `kn` only uses `PathSlice::Loose`.
   - [ ] Parse args properly.
-  - [ ] Use `.` as a wildcard pattern.
+  - [ ] Use `-` as a wildcard pattern. (Any alternatives to "-"?)
     - `a b` would mean `b` after `a`.
     - `a/b` would mean `b` **right after** `a`.
-    - `a/./b` would mean `b` exactly one dir after from `a`.
-    - `a . b` would mean `b` at least one dir after `a`.
+    - `a/-/b` would mean `b` exactly one dir after from `a`.
+    - `a - b` would mean `b` at least one dir after `a`.
+    - `.` can be used in the beginning. `./a` would mean `a` in current dir and `/a` would mean `a` in `/`.
   The combination of all of the above probably helps narrow down the search to a tiny fraction of what the first version of `kn` did.
+  
+  There's a problem with glued slices. Right now `kn a/b` would not match `a/x/a/b` because there's no `b` right after `a`. So actually if the user uses even one loose slice or doesn't specify the start dir, there will be no gains from glued slices.
+- [ ] Try to interpret the longest sequence of glued slices as a literal path and ignore other matches by those slices.
 - [ ] Add `--help` to `se` function. (How?)
-- [ ] Compare slices with `String::windows` instead of matching regex? Constructing regex from user's input seems hacky, even if it's validated.
+- [ ] Compare slices with `str::match` instead of matching regex? Constructing regex from user's input seems hacky, even if it's validated.
+- [ ] Make `abc` match `axxxbxxxc` etc. This would allow the user to only type the crucial parts of the path.
 - [ ] Make `kn` somewhat interactive. Tab could confirm the path `kn` has found so far and the search could begin from that location. That would narrow down the search. (Is that possible with `fish` and other shells?)
 - [ ] Config. (It's definitely better than using flags but is it necessary?)
   - Max space between slices. With space 2 `kn a b` would match `a/x/x/b` but not `a/x/x/x/b`.
