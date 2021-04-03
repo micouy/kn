@@ -1,3 +1,5 @@
+//! Error.
+
 use thiserror::Error;
 
 /// `kn` error.

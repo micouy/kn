@@ -1,3 +1,5 @@
+//! Command line interface logic.
+
 use clap::{App, AppSettings, Arg, SubCommand};
 
 /// Creates [`clap::App`](clap::App).

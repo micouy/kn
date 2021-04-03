@@ -1,3 +1,5 @@
+//! Utils.
+
 use regex::Regex;
 
 use std::{
@@ -9,7 +11,7 @@ use std::{
 
 use crate::{
     error::Error,
-    node::{DigResult, EntryNode, PathSlice},
+    node::{DigResult, EntryNode, PathSlice, PathSlices},
 };
 
 /// Find paths matching slices, beginning search at `start_dir`.
@@ -99,7 +101,7 @@ where
     Ok((start_dir, args))
 }
 
-/// Prepare the first level of [`EntryNode`](crate::EntryNode)s.
+/// Prepare the first level of [`EntryNode`](crate::node::EntryNode)s.
 pub fn prepare_first_level<'a, P>(
     path: P,
     args: &'a [PathSlice],
@@ -116,7 +118,7 @@ where
         })
         .map(|entry| {
             // TODO: Add field `level` with value 0.
-            EntryNode(entry.path(), args)
+            EntryNode(entry.path(), PathSlices::new(args))
         })
         .collect::<VecDeque<_>>();
 

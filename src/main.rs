@@ -1,4 +1,5 @@
 #![feature(exact_size_is_empty, box_syntax)]
+#![allow(unused_parens)]
 
 use std::{collections::VecDeque, io::Write, process::exit};
 
@@ -12,13 +13,6 @@ use error::Error;
 use utils::*;
 
 fn main() -> Result<(), Error> {
-    #[cfg(debug_assertions)]
-    {
-        if std::env::var("RUST_LOG").is_err() {
-            std::env::set_var("RUST_LOG", "debug");
-        }
-    }
-
     pretty_env_logger::init();
 
     let matches = app::app().get_matches();

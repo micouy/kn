@@ -1,3 +1,6 @@
+//! Things related to [`PathSlice`](crate::node::PathSlice)s and
+//! [`EntryNode`](crate::node::EntryNode)s.
+
 use std::path::PathBuf;
 
 use regex::Regex;
@@ -10,6 +13,97 @@ pub enum PathSlice {
     /// A slice of path that can be matched a number of components after the
     /// previous one.
     Loose(Regex),
+}
+
+/// A result of matching a component against slices left.
+pub enum MatchResult<'a> {
+    FullMatch,
+    Continue(PathSlices<'a>),
+}
+
+/// A wrapper around [`&[PathSlice]`](crate::node::PathSlice). Allows to easily
+/// recover from a premature match of a glued slice.
+#[derive(Copy, Clone, Debug)]
+pub struct PathSlices<'a> {
+    last_match: Option<usize>,
+    slices: &'a [PathSlice],
+}
+
+impl<'a> PathSlices<'a> {
+    pub fn new(slices: &'a [PathSlice]) -> Self {
+        Self {
+            last_match: None,
+            slices,
+        }
+    }
+
+    pub fn try_match(&self, comp: &str) -> MatchResult<'a> {
+        use MatchResult::*;
+
+        let ix = self
+            .last_match
+            .map(|last_match| last_match + 1)
+            .unwrap_or(0);
+
+        match self.slices.get(ix) {
+            None => return FullMatch, // Full match? Or error?
+            Some(slice) => match slice {
+                PathSlice::Loose(re) =>
+                    if re.is_match(comp) {
+                        let last_match = Some(ix);
+                        let is_match_last = (ix >= self.slices.len() - 1);
+
+                        if is_match_last {
+                            return FullMatch;
+                        } else {
+                            return Continue(PathSlices {
+                                last_match,
+                                slices: self.slices,
+                            });
+                        }
+                    } else {
+                        return Continue(*self);
+                    },
+                PathSlice::Glued(re) =>
+                    if re.is_match(comp) {
+                        let last_match = Some(ix);
+                        let is_match_last = (ix >= self.slices.len() - 1);
+
+                        if is_match_last {
+                            return FullMatch;
+                        } else {
+                            return Continue(PathSlices {
+                                last_match,
+                                slices: self.slices,
+                            });
+                        }
+                    } else {
+                        // return to the last loose slice
+                        let last_match = (0..ix)
+                            .rev()
+                            .filter_map(|i| {
+                                if let Some(PathSlice::Loose(_)) =
+                                    self.slices.get(i)
+                                {
+                                    if i == 0 {
+                                        None
+                                    } else {
+                                        Some(i - 1)
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .next();
+
+                        return Continue(PathSlices {
+                            last_match,
+                            slices: self.slices,
+                        });
+                    },
+            },
+        }
+    }
 }
 
 /// A result of digging one level further down the file tree.
@@ -25,7 +119,7 @@ pub enum DigResult<'a> {
 
 /// A container for an entry and args left to match.
 #[derive(Debug)]
-pub struct EntryNode<'a>(pub PathBuf, pub &'a [PathSlice]);
+pub struct EntryNode<'a>(pub PathBuf, pub PathSlices<'a>);
 
 impl<'a> EntryNode<'a> {
     /// Dig one level further down the file tree.
@@ -42,60 +136,27 @@ impl<'a> EntryNode<'a> {
             None => {
                 // TODO: Fix later. Probably not a problem
                 // since all valid entries should have a filename.
-                return DeadEnd;
+                return DigResult::DeadEnd;
             }
         };
         let comp: &str = &comp;
 
-        use DigResult::*;
-        let whole = self.1;
-
-        match whole {
-            [] => FullMatch,
-            [PathSlice::Glued(re), rest @ ..] =>
-                if re.is_match(comp) {
-                    match rest {
-                        [_, ..] => Continue(self.prepare_children(rest)),
-                        [] => FullMatch,
-                    }
-                } else {
-                    DeadEnd
-                },
-            [PathSlice::Loose(re), rest @ ..] =>
-                if re.is_match(comp) {
-                    match rest {
-                        [_, ..] => {
-                            // Continue
-                            let children =
-                                self.prepare_children(rest).collect::<Vec<_>>();
-                            if self.0.starts_with("/Users/mikolaj/mine") {
-                                log::debug!("node: {}", self.0.display());
-                                log::debug!("children: {:?}", children);
-                            }
-                            Continue(box children.into_iter())
-                        }
-                        [] => FullMatch,
-                    }
-                } else {
-                    Continue(self.prepare_children(whole))
-                },
+        match self.1.try_match(comp) {
+            MatchResult::FullMatch => DigResult::FullMatch,
+            MatchResult::Continue(slices) =>
+                DigResult::Continue(self.prepare_children(slices)),
         }
     }
 
     fn prepare_children(
         &self,
-        slices_left: &'a [PathSlice],
+        slices_left: PathSlices<'a>,
     ) -> Box<dyn Iterator<Item = EntryNode<'a>> + 'a> {
         log::trace!("prepare children");
 
         let read_dir = match self.0.read_dir() {
             Ok(read_dir) => read_dir,
-            Err(err) => {
-                log::warn!("cant read dir: {}", self.0.display());
-                log::warn!("error message: {}", err);
-
-                return box std::iter::empty();
-            }
+            Err(_) => return box std::iter::empty(),
         };
 
         let children = read_dir
