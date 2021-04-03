@@ -22,12 +22,36 @@ pub fn app() -> App<'static, 'static> {
                     Arg::with_name("shell")
                         .possible_values(&["fish"])
                         .required(true),
-                ),
+                )
+                .arg(
+                    Arg::with_name("first-max-depth")
+                    	.long("first-max-depth")
+                    	.help("Max depth of the first match.")
+                    	.takes_value(true)
+            	)
+                .arg(
+                    Arg::with_name("next-max-depth")
+                    	.long("next-max-depth")
+                    	.help("Max difference of depth between one match and the next one.")
+                    	.takes_value(true)
+            	)
         )
         .subcommand(
             SubCommand::with_name("query")
                 .setting(AppSettings::TrailingVarArg)
                 .help("Query directory matching given slices. If the first slice is a valid dir path, the search begins there.")
+                .arg(
+                    Arg::with_name("first-max-depth")
+                    	.long("first-max-depth")
+                    	.help("Max depth of the first match.")
+                    	.takes_value(true)
+            	)
+                .arg(
+                    Arg::with_name("next-max-depth")
+                    	.long("next-max-depth")
+                    	.help("Max difference of depth between one match and the next one.")
+                    	.takes_value(true)
+            	)
                 .arg(
                     Arg::with_name("SLICES")
                         .help("Slices of path to be matched.")

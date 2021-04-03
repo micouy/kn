@@ -15,7 +15,11 @@ use crate::{
 };
 
 /// Find paths matching slices, beginning search at `start_dir`.
-pub fn find_paths<'a>(mut entries: VecDeque<EntryNode<'a>>) -> Vec<PathBuf> {
+pub fn find_paths<'a>(
+    mut entries: VecDeque<EntryNode<'a>>,
+    _first_max_depth: Option<u32>,
+    _next_max_depth: Option<u32>,
+) -> Vec<PathBuf> {
     log::trace!("find paths");
 
     // TODO: Use finding depth to get all findings with the same depth

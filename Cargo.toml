@@ -17,3 +17,4 @@ clap = "2.33"
 thiserror = "1.0"
 pretty_env_logger = "*"
 log = "*"
+tera = { version = "1", default-features = false }
