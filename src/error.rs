@@ -11,10 +11,8 @@ pub enum Error {
         file: &'static str,
         cause: String,
     },
-    #[error(
-        "Invalid slice. Slices should only contain alphanumeric characters."
-    )]
-    InvalidSlice,
+    #[error("Invalid slice sequence: `{0}`.")]
+    InvalidSliceSequence(String),
     #[error("Invalid value for arg `{0}`.")]
     InvalidArgValue(String),
     #[error(transparent)]
