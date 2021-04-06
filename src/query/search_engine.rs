@@ -5,7 +5,6 @@ use std::{
 };
 
 pub trait SearchEngine {
-    // `-> Vec<...>` or `-> Result<Vec<...>>`?
     fn read_dir<P>(&self, dir: P) -> Vec<PathBuf>
     where
         P: AsRef<Path>;
