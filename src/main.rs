@@ -4,8 +4,9 @@
 use std::process::exit;
 
 #[macro_use]
-mod error;
+mod utils;
 mod app;
+mod error;
 mod init;
 mod query;
 

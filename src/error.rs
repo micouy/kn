@@ -18,13 +18,3 @@ pub enum Error {
     #[error(transparent)]
     IO(#[from] std::io::Error),
 }
-
-macro_rules! dev_err {
-    ($cause:expr) => {
-        Error::DevError {
-            line: line!(),
-            file: file!(),
-            cause: $cause.to_string(),
-        }
-    };
-}
