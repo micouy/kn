@@ -74,6 +74,7 @@ $ kn tes fo iz
   
   There's a problem with glued slices. Right now `kn a/b` would not match `a/x/a/b` because there's no `b` right after `a`. So actually if the user uses even one loose slice or doesn't specify the start dir, there will be no gains from glued slices.
   - [x] Fix problem with premature rejection when using glued slices.
+- [ ] Think of a better terminology/analogy. "Slice of path" is already used in [`Path`'s docs](https://doc.rust-lang.org/std/path/struct.Path.html). "Subseries"?
 - [ ] Make `abc` match `axxxbxxxc` etc. This would allow the user to only type the crucial parts of the path.
 - [ ] Return all matched results at the same depth (maybe order them in some way) and make the shell script decide which one to use.
   - `a b` would mean `b` after `a`.
