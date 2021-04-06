@@ -17,4 +17,6 @@ pub enum Error {
     InvalidArgValue(String),
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    #[error("No path found.")]
+    NoPathFound,
 }

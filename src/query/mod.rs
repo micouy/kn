@@ -1,18 +1,20 @@
 #[allow(dead_code)]
-use crate::{Error, Result};
+use crate::{utils::as_path, Error, Result};
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     path::{Path, PathBuf},
 };
 
 use clap::ArgMatches;
 
+mod entry;
 mod search_engine;
 mod sequence;
 mod slice;
 
-use search_engine::SearchEngine;
+use entry::{Entry, EntryMatch};
+use search_engine::{ReadDirEngine, SearchEngine};
 use sequence::{Sequence, SequenceFlow};
 
 pub fn query(matches: &ArgMatches<'_>) -> Result<Vec<PathBuf>> {
@@ -25,118 +27,34 @@ pub fn query(matches: &ArgMatches<'_>) -> Result<Vec<PathBuf>> {
     search(opts, slices)
 }
 
-fn search(_opts: SearchOpts, _slices: Vec<Sequence>) -> Result<Vec<PathBuf>> {
-    Err(dev_err!("unimplemented"))
-}
+fn search(opts: SearchOpts, sequences: Vec<Sequence>) -> Result<Vec<PathBuf>> {
+    use entry::EntryMatch::*;
 
-#[derive(Debug, Clone)]
-pub struct Entry {
-    sequences: Vec<Sequence>,
-    path: PathBuf,
-    opts: SearchOpts,
-    attempt_count: usize,
-    last_match: Option<usize>,
-}
+    let engine = search_engine::ReadDirEngine;
 
-impl Entry {
-    pub fn new(
-        path: PathBuf,
-        sequences: Vec<Sequence>,
-        opts: SearchOpts,
-    ) -> Self {
-        Self {
-            path,
-            sequences,
-            opts,
-            attempt_count: 0,
-            last_match: None,
+    let mut queue = engine
+        .read_dir(&opts.start_dir)
+        .into_iter()
+        .map(|subdir| Entry::new(subdir, sequences.clone(), opts.clone()))
+        .collect::<VecDeque<_>>();
+
+    while let Some(entry) = queue.pop_front() {
+        match entry.fire_walk(&engine)? {
+            DeadEnd => {}
+            Advancement(children, _strength) => {
+                queue.extend(children.into_iter());
+            }
+            FullMatch(path, _strength) => {
+                // TODO: Push fully matched entries to `found`. Track depths
+                // and reject entries deeper than the ones in `found`.
+                return Ok(vec![path]);
+            }
         }
     }
 
-    // TODO: Rename this.
-    pub fn fire_walk<E>(&self, engine: E) -> Result<EntryMatch>
-    where
-        E: SearchEngine,
-    {
-        use EntryMatch::*;
-
-        let component = self
-            .path
-            .file_name()
-            .ok_or(dev_err!("no filename in entry path"))?
-            .to_string_lossy();
-
-        let sequence = self
-            .sequences
-            .get(0)
-            .ok_or(dev_err!("invalid current sequence index"))?;
-
-        let sequence_match = sequence.match_component(
-            &component,
-            self.attempt_count,
-            self.last_match,
-            &self.opts,
-        )?;
-
-        let result = match sequence_match {
-            SequenceFlow::Next(strength) => {
-                let is_last = (self.sequences.len() <= 1);
-
-                if is_last {
-                    FullMatch(self.path.clone(), strength)
-                } else {
-                    let sequences = self
-                        .sequences
-                        .get(1..)
-                        .ok_or(dev_err!("entry with no sequences"))?;
-
-                    let children =
-                        self.get_children(sequences.to_vec(), engine);
-
-                    Advancement(children, strength)
-                }
-            }
-            SequenceFlow::Continue(sequence, strength) => {
-                let mut sequences = self.sequences.clone();
-                let first_sequence = sequences
-                    .get_mut(0)
-                    .ok_or(dev_err!("entry with no sequences"))?;
-                *first_sequence = sequence;
-
-                let children = self.get_children(sequences, engine);
-
-                Advancement(children, strength)
-            }
-            SequenceFlow::DeadEnd => DeadEnd,
-        };
-
-        Ok(result)
-    }
-
-    fn get_children<E>(&self, sequences: Vec<Sequence>, engine: E) -> Vec<Entry>
-    where
-        E: SearchEngine,
-    {
-        engine
-            .read_dir(&self.path)
-            .into_iter()
-            .map(|child_path| Entry {
-                attempt_count: self.attempt_count + 1,
-                sequences: sequences.clone(),
-                path: child_path,
-                opts: self.opts.clone(),
-                last_match: None,
-            })
-            .collect()
-    }
+    Err(Error::NoPathFound)
 }
 
-#[derive(Debug)]
-pub enum EntryMatch {
-    Advancement(Vec<Entry>, MatchStrength),
-    FullMatch(PathBuf, MatchStrength),
-    DeadEnd,
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct SearchOpts {
@@ -153,9 +71,20 @@ pub enum MatchStrength {
 }
 
 fn parse_args(matches: &ArgMatches<'_>) -> Result<(SearchOpts, Vec<Sequence>)> {
-    let slices = matches
+    let mut slices = matches
         .values_of("SLICES")
-        .ok_or(dev_err!("required `clap` arg absent"))?;
+        .ok_or(dev_err!("required `clap` arg absent"))?
+        .peekable();
+
+    if slices.is_empty() {
+        return Err(dev_err!("required `clap` arg empty"));
+    }
+
+    let start_dir = slices
+        .next_if(|first| as_path(first).is_dir())
+        .map(|first| Ok(PathBuf::from(first)))
+        .unwrap_or_else(|| std::env::current_dir())?;
+
     let slices = slices
         .map(|slice| Sequence::from_str(slice))
         .collect::<Result<Vec<_>>>()?;
@@ -175,7 +104,7 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<(SearchOpts, Vec<Sequence>)> {
     let opts = SearchOpts {
         first_depth,
         next_depth,
-        start_dir: PathBuf::from("."),
+        start_dir,
     };
 
     Ok((opts, slices))
@@ -184,13 +113,7 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<(SearchOpts, Vec<Sequence>)> {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    fn as_path<P>(path: &P) -> &Path
-    where
-        P: AsRef<Path> + ?Sized,
-    {
-        path.as_ref()
-    }
+    use crate::utils::as_path;
 
     #[test]
     fn test_sequence_from_str() {
@@ -219,12 +142,14 @@ mod test {
         let result = sequence_abc
             .match_component("a", 0, last_match, &opts)
             .unwrap();
-        let sequence_bc = variant!(result, Continue(sequence, Complete) => sequence);
+        let sequence_bc =
+            variant!(result, Continue(sequence, Complete) => sequence);
 
         let result = sequence_bc
             .match_component("bee", 1, last_match, &opts)
             .unwrap();
-        let sequence_c = variant!(result, Continue(sequence, Partial) => sequence);
+        let sequence_c =
+            variant!(result, Continue(sequence, Partial) => sequence);
 
         let result = sequence_c
             .match_component("ice", 2, last_match, &opts)
@@ -246,17 +171,20 @@ mod test {
         let result = sequence_xy
             .match_component("x", 0, last_match, &opts)
             .unwrap();
-        let sequence_y = variant!(result, Continue(sequence, Complete) => sequence);
+        let sequence_y =
+            variant!(result, Continue(sequence, Complete) => sequence);
 
         let result = sequence_y
             .match_component("o", 1, last_match, &opts)
             .unwrap();
-        let sequence_xy = variant!(result, Continue(sequence, Naught) => sequence);
+        let sequence_xy =
+            variant!(result, Continue(sequence, Naught) => sequence);
 
         let result = sequence_xy
             .match_component("ox", 2, last_match, &opts)
             .unwrap();
-        let sequence_y = variant!(result, Continue(sequence, Partial) => sequence);
+        let sequence_y =
+            variant!(result, Continue(sequence, Partial) => sequence);
 
         let result = sequence_y
             .match_component("ymoron", 3, last_match, &opts)
@@ -284,25 +212,25 @@ mod test {
         // path: [a]
         // slices: [a]/b
         let entry_a = Entry::new("a".into(), vec![sequence_ab], opts);
-        assert_eq!(entry_a.path, as_path("a"));
+        assert_eq!(entry_a.path(), as_path("a"));
         let result = entry_a.fire_walk(&search_engine).unwrap();
 
         // path: a/[o]
         // slices: a/[b]
         let entry_ao = variant!(result, Advancement(children, Complete) => children[0].clone());
-        assert_eq!(entry_ao.path, as_path("a/o"));
+        assert_eq!(entry_ao.path(), as_path("a/o"));
         let result = entry_ao.fire_walk(&search_engine).unwrap();
 
         // path: a/o/[a]
         // slices: [a]/b
         let entry_aoa = variant!(result, Advancement(children, Naught) => children[0].clone());
-        assert_eq!(entry_aoa.path, as_path("a/o/a"));
+        assert_eq!(entry_aoa.path(), as_path("a/o/a"));
         let result = entry_aoa.fire_walk(&search_engine).unwrap();
 
         // path: a/o/a/[b]
         // slices: a/[b]
         let entry_aoab = variant!(result, Advancement(children, Complete) => children[0].clone());
-        assert_eq!(entry_aoab.path, as_path("a/o/a/b"));
+        assert_eq!(entry_aoab.path(), as_path("a/o/a/b"));
         let result = entry_aoab.fire_walk(&search_engine).unwrap();
 
         let path = variant!(result, FullMatch(path, Complete) => path);

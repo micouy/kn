@@ -1,3 +1,13 @@
+use std::{convert::AsRef, path::Path};
+
+pub fn as_path<P>(path: &P) -> &Path
+where
+    P: AsRef<Path> + ?Sized,
+{
+    path.as_ref()
+}
+
+#[cfg(test)]
 macro_rules! variant {
     ($expression_in:expr, $pattern:pat => $expression_out:expr) => {
         match $expression_in {

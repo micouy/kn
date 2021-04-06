@@ -10,7 +10,7 @@ pub trait SearchEngine {
         P: AsRef<Path>;
 }
 
-struct ReadDirEngine;
+pub struct ReadDirEngine;
 
 impl SearchEngine for ReadDirEngine {
     fn read_dir<P>(&self, dir: P) -> Vec<PathBuf>
@@ -22,6 +22,12 @@ impl SearchEngine for ReadDirEngine {
             .map(|read_dir| {
                 read_dir
                     .filter_map(|entry| entry.ok())
+                    .filter(|entry| {
+                        entry
+                            .metadata()
+                            .map(|meta| meta.is_dir())
+                            .unwrap_or(false)
+                    })
                     .map(|entry| entry.path())
                     .collect()
             })

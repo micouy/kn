@@ -32,16 +32,22 @@ fn inner() -> Result<()> {
 
         exit(0);
     } else if let Some(ref matches) = matches.subcommand_matches("query") {
-        let found = query::query(matches)?;
+        match query::query(matches) {
+            Err(error) => {
+                eprintln!("{}", error);
 
-        if let Some(first) = found.get(0) {
-            print!("{}", first.display());
+                exit(1);
+            }
+            Ok(found) =>
+                if let Some(first) = found.get(0) {
+                    print!("{}", first.display());
 
-            exit(0);
-        } else {
-            eprintln!("nothing found");
+                    exit(0);
+                } else {
+                    eprintln!("nothing found");
 
-            exit(1);
+                    exit(1);
+                },
         }
     }
 
