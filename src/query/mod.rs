@@ -216,29 +216,20 @@ mod test {
 
         // Test path: `a/bee/ice`.
 
-        let sequence_bc = match sequence_abc
+        let result = sequence_abc
             .match_component("a", 0, last_match, &opts)
-            .unwrap()
-        {
-            Continue(sequence, Complete) => sequence,
-            other => panic!("{:?}", other),
-        };
+            .unwrap();
+        let sequence_bc = variant!(result, Continue(sequence, Complete) => sequence);
 
-        let sequence_c = match sequence_bc
+        let result = sequence_bc
             .match_component("bee", 1, last_match, &opts)
-            .unwrap()
-        {
-            Continue(sequence, Partial) => sequence,
-            other => panic!("{:?}", other),
-        };
+            .unwrap();
+        let sequence_c = variant!(result, Continue(sequence, Partial) => sequence);
 
-        let () = match sequence_c
+        let result = sequence_c
             .match_component("ice", 2, last_match, &opts)
-            .unwrap()
-        {
-            Next(Partial) => {}
-            other => panic!("{:?}", other),
-        };
+            .unwrap();
+        variant!(result, Next(Partial) => ());
     }
 
     #[test]
@@ -252,37 +243,25 @@ mod test {
 
         // Test path: `x/o/ox/ymoron`.
 
-        let sequence_y = match sequence_xy
+        let result = sequence_xy
             .match_component("x", 0, last_match, &opts)
-            .unwrap()
-        {
-            Continue(sequence, Complete) => sequence,
-            other => panic!("{:?}", other),
-        };
+            .unwrap();
+        let sequence_y = variant!(result, Continue(sequence, Complete) => sequence);
 
-        let sequence_xy = match sequence_y
+        let result = sequence_y
             .match_component("o", 1, last_match, &opts)
-            .unwrap()
-        {
-            Continue(sequence, Naught) => sequence,
-            other => panic!("{:?}", other),
-        };
+            .unwrap();
+        let sequence_xy = variant!(result, Continue(sequence, Naught) => sequence);
 
-        let sequence_y = match sequence_xy
+        let result = sequence_xy
             .match_component("ox", 2, last_match, &opts)
-            .unwrap()
-        {
-            Continue(sequence, Partial) => sequence,
-            other => panic!("{:?}", other),
-        };
+            .unwrap();
+        let sequence_y = variant!(result, Continue(sequence, Partial) => sequence);
 
-        let () = match sequence_y
+        let result = sequence_y
             .match_component("ymoron", 3, last_match, &opts)
-            .unwrap()
-        {
-            Next(Partial) => {}
-            other => panic!("{:?}", other),
-        };
+            .unwrap();
+        variant!(result, Next(Partial) => ());
     }
 
     #[test]
