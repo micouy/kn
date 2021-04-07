@@ -11,22 +11,12 @@ pub enum Error {
         file: &'static str,
         cause: String,
     },
-    #[error(
-        "Invalid slice. Slices should only contain alphanumeric characters."
-    )]
-    InvalidSlice,
+    #[error("Invalid slice: `{0}`.")]
+    InvalidSlice(String),
     #[error("Invalid value for arg `{0}`.")]
     InvalidArgValue(String),
     #[error(transparent)]
     IO(#[from] std::io::Error),
-}
-
-macro_rules! dev_err {
-    ($cause:expr) => {
-        Error::DevError {
-            line: line!(),
-            file: file!(),
-            cause: $cause.to_string(),
-        }
-    };
+    #[error("No path found.")]
+    NoPathFound,
 }
