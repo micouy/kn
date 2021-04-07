@@ -1,6 +1,6 @@
 # `kn` */n/*
 
-`kn` is an alternative to `cd`. It matches args against each file's path's components in order. It doesn't track frecency or any other statistics.
+`kn` is an alternative to `cd`. It traverses the file tree and  matches args against each file's path's components. It doesn't track frecency or any other statistics.
 
 **WARNING**: This project is in it's alpha stage.
 
@@ -122,6 +122,7 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 - [ ] Add `--help` to `kn` function. (How?)
 - [ ] Return all matched results at the same depth (maybe order them in some way) and make the shell script decide which one to use.
 - [x] Add support for other shells.
+
 
 ## Search engine
 
