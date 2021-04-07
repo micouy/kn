@@ -154,13 +154,12 @@ mod test {
     use super::{entry::EntryMatch, *};
     use crate::utils::as_path;
 
-    use std::collections::HashMap;
+    use EntryMatch::*;
 
-    // TODO: Add tests with multiple sequences and different options.
+    use std::collections::HashMap;
 
     #[test]
     fn test_entry_walk() {
-        use EntryMatch::*;
         use MatchStrength::*;
 
         let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
@@ -204,7 +203,7 @@ mod test {
     }
 
     #[test]
-    fn test_zero_first_depth() {
+    fn test_first_depth_exceeded() {
         let search_engine = HashMap::new();
         let opts = SearchOpts {
             first_depth: Some(0),
@@ -216,13 +215,11 @@ mod test {
 
         // Check slice `a` against path `o` with `first_depth` set to 0.
         let result = entry.fire_walk(&search_engine).unwrap();
-        variant!(result, EntryMatch::DeadEnd => ());
+        variant!(result, DeadEnd);
     }
 
     #[test]
-    fn test_premature_match_dead_end() {
-        use EntryMatch::*;
-
+    fn test_premature_match() {
         let sequence_abc: Sequence = Sequence::from_str("a/b/c").unwrap();
         let opts = SearchOpts {
             first_depth: Some(1),
@@ -258,8 +255,6 @@ mod test {
 
     #[test]
     fn test_premature_match_recovery() {
-        use EntryMatch::*;
-
         let sequence_abc: Sequence = Sequence::from_str("a/b").unwrap();
         let opts = SearchOpts {
             first_depth: Some(2),
@@ -295,8 +290,6 @@ mod test {
 
     #[test]
     fn test_wildcard() {
-        use EntryMatch::*;
-
         let opts = SearchOpts {
             first_depth: Some(0),
             next_depth: Some(0),
@@ -327,5 +320,188 @@ mod test {
         let result = entry_aob.fire_walk(&search_engine).unwrap();
 
         variant!(result, FullMatch(_, _));
+    }
+
+    #[test]
+    fn test_multiple_sequences() {
+        let opts = SearchOpts {
+            first_depth: Some(0),
+            next_depth: Some(0),
+            ..Default::default()
+        };
+
+        // Test path: `a/b/x/y`.
+        let mut search_engine = HashMap::new();
+        search_engine.insert("a".into(), vec!["a/b".into()]);
+        search_engine.insert("a/b".into(), vec!["a/b/x".into()]);
+        search_engine.insert("a/b/x".into(), vec!["a/b/x/y".into()]);
+
+        // path: [a]
+        // slices: [a]/b ...
+        let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
+        let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
+        let entry_a =
+            Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
+        let result = entry_a.fire_walk(&search_engine).unwrap();
+
+        // path: a/[b]
+        // slices: a/[b] ...
+        let entry_ab =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_ab.fire_walk(&search_engine).unwrap();
+
+        // path: a/b/[x]
+        // slices: ... [x]/y
+        let entry_abx =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_abx.fire_walk(&search_engine).unwrap();
+
+        // path: a/b/x/y
+        // slices: ... x/[y]
+        let entry_abxy =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_abxy.fire_walk(&search_engine).unwrap();
+
+        variant!(result, FullMatch(_, _));
+    }
+
+    #[test]
+    fn test_next_depth_exceeded() {
+        let opts = SearchOpts {
+            first_depth: Some(0),
+            next_depth: Some(0),
+            ..Default::default()
+        };
+
+        // Test path: `a/b/o/x/y`.
+        let mut search_engine = HashMap::new();
+        search_engine.insert("a".into(), vec!["a/b".into()]);
+        search_engine.insert("a/b".into(), vec!["a/b/o".into()]);
+        search_engine.insert("a/b/o".into(), vec!["a/b/o/x".into()]);
+        search_engine.insert("a/b/o/x".into(), vec!["a/b/o/x/y".into()]);
+
+        // path: [a]
+        // slices: [a]/b ...
+        let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
+        let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
+        let entry_a =
+            Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
+        let result = entry_a.fire_walk(&search_engine).unwrap();
+
+        // path: a/[b]
+        // slices: a/[b] ...
+        let entry_ab =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_ab.fire_walk(&search_engine).unwrap();
+
+        // path: a/b/[o]
+        // slices: ... [x]/y
+        let entry_abx =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_abx.fire_walk(&search_engine).unwrap();
+
+        variant!(result, DeadEnd);
+    }
+
+    #[test]
+    fn test_next_depth() {
+        use MatchStrength::*;
+
+        let opts = SearchOpts {
+            first_depth: Some(0),
+            next_depth: Some(1),
+            ..Default::default()
+        };
+
+        // Test path: `a/b/o/x/y`.
+        let mut search_engine = HashMap::new();
+        search_engine.insert("a".into(), vec!["a/b".into()]);
+        search_engine.insert("a/b".into(), vec!["a/b/o".into()]);
+        search_engine.insert("a/b/o".into(), vec!["a/b/o/x".into()]);
+        search_engine.insert("a/b/o/x".into(), vec!["a/b/o/x/y".into()]);
+
+        // path: [a]
+        // slices: [a]/b ...
+        let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
+        let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
+        let entry_a =
+            Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
+        let result = entry_a.fire_walk(&search_engine).unwrap();
+
+        // path: a/[b]
+        // slices: a/[b] ...
+        let entry_ab =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_ab.fire_walk(&search_engine).unwrap();
+
+        // path: a/b/[o]
+        // slices: ... [x]/y
+        let entry_abo =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_abo.fire_walk(&search_engine).unwrap();
+
+        // path: a/b/o/[x]
+        // slices: ... [x]/y
+        let entry_abox = variant!(result, Advancement(children, Naught) => children[0].clone());
+        let result = entry_abox.fire_walk(&search_engine).unwrap();
+
+        // path: a/b/o/x/[y]
+        // slices: ... x/[y]
+        let entry_aboxy =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_aboxy.fire_walk(&search_engine).unwrap();
+
+        variant!(result, FullMatch(_, _));
+    }
+
+    #[test]
+    fn test_next_depth_premature_match() {
+        use MatchStrength::*;
+
+        let opts = SearchOpts {
+            first_depth: Some(0),
+            next_depth: Some(1),
+            ..Default::default()
+        };
+
+        // Test path: `a/b/o/x/o`.
+        let mut search_engine = HashMap::new();
+        search_engine.insert("a".into(), vec!["a/b".into()]);
+        search_engine.insert("a/b".into(), vec!["a/b/o".into()]);
+        search_engine.insert("a/b/o".into(), vec!["a/b/o/x".into()]);
+        search_engine.insert("a/b/o/x".into(), vec!["a/b/o/x/o".into()]);
+
+        // path: [a]
+        // slices: [a]/b ...
+        let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
+        let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
+        let entry_a =
+            Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
+        let result = entry_a.fire_walk(&search_engine).unwrap();
+
+        // path: a/[b]
+        // slices: a/[b] ...
+        let entry_ab =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_ab.fire_walk(&search_engine).unwrap();
+
+        // path: a/b/[o]
+        // slices: ... [x]/y
+        let entry_abo =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_abo.fire_walk(&search_engine).unwrap();
+
+        // path: a/b/o/[x]
+        // slices: ... [x]/y
+        let entry_abox = variant!(result, Advancement(children, Naught) => children[0].clone());
+        let result = entry_abox.fire_walk(&search_engine).unwrap();
+
+        // path: a/b/o/x/[o]
+        // slices: ... x/[y]
+        let entry_aboxy =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_aboxy.fire_walk(&search_engine).unwrap();
+
+        variant!(result, DeadEnd);
     }
 }
