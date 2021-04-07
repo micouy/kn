@@ -25,17 +25,22 @@ pub fn init(matches: &ArgMatches<'_>) -> Result<String> {
         context.insert("next_max_depth", &depth);
     }
 
-    match shell {
-        "fish" => {
-            let output = Tera::one_off(
-                include_str!("../../init/kn.fish.template"),
+    let generate_script = |s| {
+        Tera::one_off(
+                s,
                 &context,
                 true,
             )
-            .map_err(|err| dev_err!(err));
+            .map_err(|err| dev_err!(err))
+    };
 
-            output
-        }
+    match shell {
+        "fish" =>
+			generate_script(include_str!("../../init/kn.fish.template")),
+        "bash" =>
+			generate_script(include_str!("../../init/kn.bash.template")),
+        "zsh" =>
+			generate_script(include_str!("../../init/kn.zsh.template")),
         _ => Err(Error::InvalidArgValue("shell".to_string())),
     }
 }

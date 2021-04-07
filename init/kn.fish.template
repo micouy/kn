@@ -1,4 +1,4 @@
-# code repurposed from zoxide/templates/fish.txt
+# Code repurposed from `zoxide/templates/fish.txt`.
 
 function kn
     set argc (count $argv)

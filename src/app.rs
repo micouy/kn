@@ -21,7 +21,7 @@ pub fn app() -> App<'static, 'static> {
                 .help("Get init script for your shell.")
                 .arg(
                     Arg::with_name("shell")
-                        .possible_values(&["fish"])
+                        .possible_values(&["fish", "bash", "zsh"])
                         .required(true),
                 )
                 .arg(

@@ -2,7 +2,8 @@
 
 `kn` is an alternative to `cd`. It matches args against each file's path's components in order. It doesn't track frecency or any other statistics.
 
-The project is in it's alpha stage. For now it only works with `fish` shell.
+**WARNING**: This project is in it's alpha stage.
+
 
 # Installation
 
@@ -11,14 +12,24 @@ The project is in it's alpha stage. For now it only works with `fish` shell.
 3. Put the binary in a folder that is in `PATH` so that it can be accessed by the script:
   
   `cargo build -Z unstable-options --out-dir DESTINATION --release`
-4. Put this line in your `config.fish`:
+4. Change the config of your shell:
   
-  `_kn init fish | source`
+  * `fish` (usually `~/.config/fish/fish.config`):
   
-  You can set options like this:
+    `_kn init fish | source`
+  * `bash` (usually `~/.bashrc`):
+  
+    `eval "$(_kn init bash)"`
+    
+  * `zsh` (usually `~/.zsh`):
+  
+    `eval "$(_kn init zsh)"`
+5. You can set options by passing args to `_kn init` in your config file. For example in `fish` you do it like this:
   
   `_kn init fish --first-max-depth 3 --next-max-depth 3 | source`
-5. After launching a new `fish` instance or reloading the config with `source YOUR_FISH_CONFIG_PATH` you'll be able to use the `kn` command.
+  
+  Read more about options below.
+6. After reloading the config or launching a new shell instance you'll be able to use `kn`.
 
 
 # Example
@@ -28,16 +39,27 @@ test-dir
 ├── boo
 │  └── buzz
 ├── buzz
+├── bazz
 └── foo
    ├── bizz
-   └── buzz
+   └── bazz
 ```
 
-Jump to *tes**t-dir**/fo**o**/**b**iz**z***:
+```
+$ kn                # enter ~
 
+$ kn -              # go back to previous location
+
+$ kn tes/fo/iz      # enter test-dir/foo/bizz
+
+$ kn tes biz        # enter test-dir/foo/bizz
+
+$ kn buz            # enter test-dir/buzz
+
+$ kn tes/-/baz      # enter test-dir/foo/bazz
 ```
-$ kn tes/fo/iz
-```
+
+`kn ..`, `kn .`, `kn /` also work.
 
 
 # Behavior
@@ -52,10 +74,19 @@ $ kn tes/fo/iz
   `kn a - b` means "Match `b` at depth 1 below `a` or deeper.".
 * `kn` matches at most one slice against each component of the path (meaning `abba` matches `a`, not `a` AND `b`).
 
+
 # Options
 
 * `--first-max-depth` sets the max depth at which the first match must occur. If set to 0, the first match must occur directly in the start dir.
 * `--next-max-depth` sets the max relative depth at which each successive match must occur. If set to 0, each match must occur directly inside the previously matched dir.
+
+
+# Help wanted
+
+In this project I have entered a lot of areas I have little knowledge about. Contributions and criticism are very welcome. Here are some small things you can do to help me:
+
+- Check the correctness of scripts in [init/](init/).
+- Add scripts and installation instructions for shells other than `fish`, `bash` and `zsh`.
 
 
 # TODO
@@ -90,7 +121,7 @@ $ kn tes/fo/iz
 - [ ] Make `kn` somewhat interactive. Tab could confirm the path `kn` has found so far and the search could begin from that location. That would narrow down the search. (Is that possible with `fish` and other shells?)
 - [ ] Add `--help` to `kn` function. (How?)
 - [ ] Return all matched results at the same depth (maybe order them in some way) and make the shell script decide which one to use.
-- [ ] Add support for other shells.
+- [x] Add support for other shells.
 
 ## Search engine
 
