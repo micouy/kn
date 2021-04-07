@@ -68,9 +68,9 @@ $ kn tes/-/baz      # enter test-dir/foo/bazz
 * Loose slices: `kn a b` means "Match `b` after `a` (at depth 0 or deeper).".
 * Glued slices: `kn a/b` means "Match `b` right after `a` (at depth 0).".
 * Wildcards:
-  
+
   `kn a/-/b` means "Match `b` at depth 1 below `a`.".
-  
+
   `kn a - b` means "Match `b` at depth 1 below `a` or deeper.".
 * `kn` matches at most one slice against each component of the path (meaning `abba` matches `a`, not `a` AND `b`).
 
