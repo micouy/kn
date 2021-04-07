@@ -151,12 +151,13 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<(SearchOpts, Vec<Sequence>)> {
 
 #[cfg(test)]
 mod test {
-    use super::{entry::EntryMatch, sequence::SequenceFlow, *};
+    use super::{entry::EntryMatch, *};
     use crate::utils::as_path;
 
     use std::collections::HashMap;
 
     // TODO: Add tests with multiple sequences and different options.
+
     #[test]
     fn test_entry_walk() {
         use EntryMatch::*;
