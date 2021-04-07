@@ -72,7 +72,8 @@ $ kn tes/fo/iz
   - `a/-/b` would mean `b` exactly one dir after from `a`.
   - `a - b` would mean `b` at least one dir after `a`.
   - `.` can be used in the beginning. `./a` would mean `a` in current dir and `/a` would mean `a` in `/`.
-- [ ] ~Try to interpret the longest sequence of glued slices as a literal path~ Try to interpret each slice as a literal and ignore other matches by those slices?
+- [x] Try to interpret the longest prefix of the first sequence as a literal path.
+- [ ] Ignore partial matches if there's a complete match in this subdir?
 - [ ] Make `abc` match `axxxbxxxc`? This would allow the user to only type the crucial parts of the path.
 
 
@@ -89,12 +90,13 @@ $ kn tes/fo/iz
 - [ ] Make `kn` somewhat interactive. Tab could confirm the path `kn` has found so far and the search could begin from that location. That would narrow down the search. (Is that possible with `fish` and other shells?)
 - [ ] Add `--help` to `kn` function. (How?)
 - [ ] Return all matched results at the same depth (maybe order them in some way) and make the shell script decide which one to use.
+- [ ] Add support for other shells.
 
 ## Search engine
 
 - [x] Match only directories.
 - [x] Make the search engine generic and add tests with a mock file system/search engine.
-- [ ] Use inodes instead of traversing the directory structure using `read_dir()`. [Guide.](https://fasterthanli.me/series/reading-files-the-hard-way)
+- [ ] Use inodes instead of traversing the directory structure using `read_dir()`. [Guide.](https://fasterthanli.me/series/reading-files-the-hard-way) Are there inodes on other OSes?
 
 
 ## Other

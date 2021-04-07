@@ -32,12 +32,15 @@ impl Entry {
         }
     }
 
+    pub fn attempt(&self) -> usize {
+        self.attempt_count
+    }
+
     pub fn path(&self) -> &Path {
         self.path.as_path()
     }
 
-    // TODO: Rename this.
-    pub fn fire_walk<E>(&self, engine: E) -> Result<EntryMatch>
+    pub fn read_dir<E>(&self, engine: E) -> Result<EntryMatch>
     where
         E: SearchEngine,
     {
@@ -73,7 +76,8 @@ impl Entry {
                         .get(1..)
                         .ok_or(dev_err!("entry with no sequences"))?;
 
-                    let last_match = Some(self.attempt_count); // Update last match.
+                    // Update last match.
+                    let last_match = Some(self.attempt_count);
                     let children = Self::get_children(
                         &self.path,
                         self.attempt_count + 1,

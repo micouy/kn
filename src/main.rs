@@ -39,6 +39,7 @@ fn inner() -> Result<()> {
                 exit(1);
             }
             Ok(found) =>
+            // TODO: Order the findings?
                 if let Some(first) = found.get(0) {
                     print!("{}", first.display());
 

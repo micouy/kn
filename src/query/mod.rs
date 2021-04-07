@@ -9,7 +9,7 @@ use std::{
 use clap::ArgMatches;
 
 use ansi_term::Colour::{Green, Red};
-use log::{debug, info};
+use log::{debug, info, trace};
 
 mod entry;
 mod search_engine;
@@ -22,10 +22,13 @@ use sequence::Sequence;
 use slice::Slice;
 
 pub fn query(matches: &ArgMatches<'_>) -> Result<Vec<PathBuf>> {
+    trace!("Handling query.");
+
     let engine = ReadDirEngine;
     let (opts, sequences) = parse_args(matches, &engine)?;
 
     if sequences.is_empty() {
+        trace!("Only starting dir provided, returning.");
         return Ok(vec![opts.start_dir]);
     }
 
@@ -48,8 +51,18 @@ where
         .map(|subdir| Entry::new(subdir, sequences.clone(), opts.clone()))
         .collect::<VecDeque<_>>();
 
+
+    let mut found: Option<(usize, Vec<PathBuf>)> = None;
+
     while let Some(entry) = queue.pop_front() {
-        match entry.fire_walk(&engine)? {
+        // Reject entries that are deeper than the ones in `found`.
+        if let Some((depth, _)) = found {
+            if entry.attempt() > depth {
+                continue;
+            }
+        }
+
+        match entry.read_dir(&engine)? {
             DeadEnd => {
                 debug!(
                     "Dead end `{}`.",
@@ -85,14 +98,19 @@ where
             FullMatch(path, _strength) => {
                 info!("Full match `{}`.", entry.path().display());
 
-                // TODO: Push fully matched entries to `found`. Track depths
-                // and reject entries deeper than the ones in `found`.
-                return Ok(vec![path]);
+                // Update `found`.
+                match found {
+                    Some((_, ref mut paths)) => paths.push(path),
+                    None => found = Some((entry.attempt(), vec![path])),
+                }
             }
         }
     }
 
-    Err(Error::NoPathFound)
+    match found {
+        Some((_, paths)) => Ok(paths),
+        None => Err(Error::NoPathFound),
+    }
 }
 
 
@@ -117,6 +135,8 @@ fn parse_args<E>(
 where
     E: SearchEngine,
 {
+    trace!("Parsing args.");
+
     let mut sequences = matches
         .values_of("SLICES")
         .ok_or(dev_err!("required `clap` arg absent"))?;
@@ -164,51 +184,15 @@ where
 {
     // TODO: Remove repetition.
 
+    trace!("Extracting start dir from first sequence.");
+
     use std::path::Component::*;
 
     let mut prefix = path.as_ref().components();
     let mut rejected = VecDeque::new();
 
-    loop {
-        let subpath = prefix.as_path();
-
-        if engine.is_dir(subpath) {
-            let start_dir = subpath.into();
-            let slices = rejected
-                .into_iter()
-                .map(|component| match component {
-                    Normal(os_str) => {
-                        let string = os_str.to_string_lossy().into_owned();
-
-                        Slice::from_string(string)
-                    }
-                    _ => Err(Error::InvalidSlice(format!(
-                        "{:?}",
-                        component.as_os_str()
-                    ))),
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let sequence = if slices.is_empty() {
-                None
-            } else {
-                Some(Sequence {
-                    slices,
-                    slice_to_match: 0,
-                })
-            };
-
-            return Ok((start_dir, sequence));
-        }
-
-        match prefix.next_back() {
-            Some(component) => rejected.push_front(component),
-            None => break,
-        }
-    }
-
-    let start_dir = std::env::current_dir()?;
-    let slices =
-        rejected
+    let generate_sequence = |rejected: VecDeque<_>| -> Result<_> {
+        let slices = rejected
             .into_iter()
             .map(|component| match component {
                 Normal(os_str) => {
@@ -222,14 +206,37 @@ where
                 ))),
             })
             .collect::<Result<Vec<_>>>()?;
-    let sequence = if slices.is_empty() {
-        None
-    } else {
-        Some(Sequence {
-            slices,
-            slice_to_match: 0,
-        })
+
+        let mb_sequence = if slices.is_empty() {
+            None
+        } else {
+            Some(Sequence {
+                slices,
+                slice_to_match: 0,
+            })
+        };
+
+        Ok(mb_sequence)
     };
+
+    loop {
+        let subpath = prefix.as_path();
+
+        if engine.is_dir(subpath) {
+            let start_dir = subpath.into();
+            let sequence = generate_sequence(rejected)?;
+
+            return Ok((start_dir, sequence));
+        }
+
+        match prefix.next_back() {
+            Some(component) => rejected.push_front(component),
+            None => break,
+        }
+    }
+
+    let start_dir = std::env::current_dir()?;
+    let sequence = generate_sequence(rejected)?;
 
     return Ok((start_dir, sequence));
 }
@@ -301,25 +308,25 @@ mod test {
         // slices: [a]/b
         let entry_a = Entry::new("a".into(), vec![sequence_ab], opts);
         assert_eq!(entry_a.path(), as_path("a"));
-        let result = entry_a.fire_walk(&search_engine).unwrap();
+        let result = entry_a.read_dir(&search_engine).unwrap();
 
         // path: a/[o]
         // slices: a/[b]
         let entry_ao = variant!(result, Advancement(children, Complete) => children[0].clone());
         assert_eq!(entry_ao.path(), as_path("a/o"));
-        let result = entry_ao.fire_walk(&search_engine).unwrap();
+        let result = entry_ao.read_dir(&search_engine).unwrap();
 
         // path: a/o/[a]
         // slices: [a]/b
         let entry_aoa = variant!(result, Advancement(children, Naught) => children[0].clone());
         assert_eq!(entry_aoa.path(), as_path("a/o/a"));
-        let result = entry_aoa.fire_walk(&search_engine).unwrap();
+        let result = entry_aoa.read_dir(&search_engine).unwrap();
 
         // path: a/o/a/[b]
         // slices: a/[b]
         let entry_aoab = variant!(result, Advancement(children, Complete) => children[0].clone());
         assert_eq!(entry_aoab.path(), as_path("a/o/a/b"));
-        let result = entry_aoab.fire_walk(&search_engine).unwrap();
+        let result = entry_aoab.read_dir(&search_engine).unwrap();
 
         let path = variant!(result, FullMatch(path, Complete) => path);
         assert_eq!(path, as_path("a/o/a/b"));
@@ -337,7 +344,7 @@ mod test {
         let entry = Entry::new("o".into(), vec![sequence_a], opts);
 
         // Check slice `a` against path `o` with `first_depth` set to 0.
-        let result = entry.fire_walk(&search_engine).unwrap();
+        let result = entry.read_dir(&search_engine).unwrap();
         variant!(result, DeadEnd);
     }
 
@@ -357,19 +364,19 @@ mod test {
         // path: [a]
         // slices: [a]/b/c
         let entry_a = Entry::new("a".into(), vec![sequence_abc], opts);
-        let result = entry_a.fire_walk(&search_engine).unwrap();
+        let result = entry_a.read_dir(&search_engine).unwrap();
 
         // path: a/[b]
         // slices: a/[b]/c
         let entry_ab =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.fire_walk(&search_engine).unwrap();
+        let result = entry_ab.read_dir(&search_engine).unwrap();
 
         // path: a/b/o
         // slices: a/b/[c]
         let entry_abo =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abo.fire_walk(&search_engine).unwrap();
+        let result = entry_abo.read_dir(&search_engine).unwrap();
         variant!(result, DeadEnd => ());
 
         // No matter what the continuation of this path is (`a/b/o/*`), the
@@ -393,13 +400,13 @@ mod test {
         // path: [a]
         // slices: [a]/b
         let entry_a = Entry::new("a".into(), vec![sequence_abc], opts);
-        let result = entry_a.fire_walk(&search_engine).unwrap();
+        let result = entry_a.read_dir(&search_engine).unwrap();
 
         // path: a/[o]
         // slices: a/[b]
         let entry_ao =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ao.fire_walk(&search_engine).unwrap();
+        let result = entry_ao.read_dir(&search_engine).unwrap();
 
         // Entry `a/o` doesn't return `DeadEnd`, because there might still be a
         // match for slice `a` at index 2 - in the next entry `a/o/*`
@@ -427,20 +434,20 @@ mod test {
         // slices: [a]/-/b
         let sequence: Sequence = Sequence::from_str("a/-/b").unwrap();
         let entry_a = Entry::new("a".into(), vec![sequence], opts);
-        let result = entry_a.fire_walk(&search_engine).unwrap();
+        let result = entry_a.read_dir(&search_engine).unwrap();
 
         // Wildcard matches any (every?) component.
         // path: a/o
         // slices: a/[-]/b
         let entry_ao =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ao.fire_walk(&search_engine).unwrap();
+        let result = entry_ao.read_dir(&search_engine).unwrap();
 
         // path: a/o/b
         // slices: a/-/[b]
         let entry_aob =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_aob.fire_walk(&search_engine).unwrap();
+        let result = entry_aob.read_dir(&search_engine).unwrap();
 
         variant!(result, FullMatch(_, _));
     }
@@ -465,25 +472,25 @@ mod test {
         let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
         let entry_a =
             Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
-        let result = entry_a.fire_walk(&search_engine).unwrap();
+        let result = entry_a.read_dir(&search_engine).unwrap();
 
         // path: a/[b]
         // slices: a/[b] ...
         let entry_ab =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.fire_walk(&search_engine).unwrap();
+        let result = entry_ab.read_dir(&search_engine).unwrap();
 
         // path: a/b/[x]
         // slices: ... [x]/y
         let entry_abx =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abx.fire_walk(&search_engine).unwrap();
+        let result = entry_abx.read_dir(&search_engine).unwrap();
 
         // path: a/b/x/y
         // slices: ... x/[y]
         let entry_abxy =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abxy.fire_walk(&search_engine).unwrap();
+        let result = entry_abxy.read_dir(&search_engine).unwrap();
 
         variant!(result, FullMatch(_, _));
     }
@@ -509,19 +516,19 @@ mod test {
         let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
         let entry_a =
             Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
-        let result = entry_a.fire_walk(&search_engine).unwrap();
+        let result = entry_a.read_dir(&search_engine).unwrap();
 
         // path: a/[b]
         // slices: a/[b] ...
         let entry_ab =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.fire_walk(&search_engine).unwrap();
+        let result = entry_ab.read_dir(&search_engine).unwrap();
 
         // path: a/b/[o]
         // slices: ... [x]/y
         let entry_abx =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abx.fire_walk(&search_engine).unwrap();
+        let result = entry_abx.read_dir(&search_engine).unwrap();
 
         variant!(result, DeadEnd);
     }
@@ -549,30 +556,30 @@ mod test {
         let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
         let entry_a =
             Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
-        let result = entry_a.fire_walk(&search_engine).unwrap();
+        let result = entry_a.read_dir(&search_engine).unwrap();
 
         // path: a/[b]
         // slices: a/[b] ...
         let entry_ab =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.fire_walk(&search_engine).unwrap();
+        let result = entry_ab.read_dir(&search_engine).unwrap();
 
         // path: a/b/[o]
         // slices: ... [x]/y
         let entry_abo =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abo.fire_walk(&search_engine).unwrap();
+        let result = entry_abo.read_dir(&search_engine).unwrap();
 
         // path: a/b/o/[x]
         // slices: ... [x]/y
         let entry_abox = variant!(result, Advancement(children, Naught) => children[0].clone());
-        let result = entry_abox.fire_walk(&search_engine).unwrap();
+        let result = entry_abox.read_dir(&search_engine).unwrap();
 
         // path: a/b/o/x/[y]
         // slices: ... x/[y]
         let entry_aboxy =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_aboxy.fire_walk(&search_engine).unwrap();
+        let result = entry_aboxy.read_dir(&search_engine).unwrap();
 
         variant!(result, FullMatch(_, _));
     }
@@ -600,30 +607,30 @@ mod test {
         let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
         let entry_a =
             Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
-        let result = entry_a.fire_walk(&search_engine).unwrap();
+        let result = entry_a.read_dir(&search_engine).unwrap();
 
         // path: a/[b]
         // slices: a/[b] ...
         let entry_ab =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.fire_walk(&search_engine).unwrap();
+        let result = entry_ab.read_dir(&search_engine).unwrap();
 
         // path: a/b/[o]
         // slices: ... [x]/y
         let entry_abo =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abo.fire_walk(&search_engine).unwrap();
+        let result = entry_abo.read_dir(&search_engine).unwrap();
 
         // path: a/b/o/[x]
         // slices: ... [x]/y
         let entry_abox = variant!(result, Advancement(children, Naught) => children[0].clone());
-        let result = entry_abox.fire_walk(&search_engine).unwrap();
+        let result = entry_abox.read_dir(&search_engine).unwrap();
 
         // path: a/b/o/x/[o]
         // slices: ... x/[y]
         let entry_aboxy =
             variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_aboxy.fire_walk(&search_engine).unwrap();
+        let result = entry_aboxy.read_dir(&search_engine).unwrap();
 
         variant!(result, DeadEnd);
     }
