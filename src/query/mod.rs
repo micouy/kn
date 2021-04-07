@@ -157,84 +157,6 @@ mod test {
     use std::collections::HashMap;
 
     // TODO: Add tests with multiple sequences and different options.
-
-    #[test]
-    fn test_sequence_from_str() {
-        assert!(Sequence::from_str(r"").is_err());
-        assert!(Sequence::from_str(r".").is_err());
-        assert!(Sequence::from_str(r"ab cd").is_err());
-        assert!(Sequence::from_str(r"\").is_err());
-        assert!(Sequence::from_str(r"\").is_err());
-
-        // assert!(Sequence::from_str(r"zażółć").is_ok());
-        assert!(Sequence::from_str(r"ab/cd/ef").is_ok());
-        assert!(Sequence::from_str(r"abc").is_ok());
-    }
-
-    #[test]
-    fn test_basic_match() {
-        use MatchStrength::*;
-        use SequenceFlow::*;
-
-        let sequence_abc: Sequence = Sequence::from_str(r"a/b/c").unwrap();
-        let opts = SearchOpts::default();
-        let last_match = None;
-
-        // Test path: `a/bee/ice`.
-
-        let result = sequence_abc
-            .match_component("a", 0, last_match, &opts)
-            .unwrap();
-        let sequence_bc =
-            variant!(result, Continue(sequence, Complete) => sequence);
-
-        let result = sequence_bc
-            .match_component("bee", 1, last_match, &opts)
-            .unwrap();
-        let sequence_c =
-            variant!(result, Continue(sequence, Partial) => sequence);
-
-        let result = sequence_c
-            .match_component("ice", 2, last_match, &opts)
-            .unwrap();
-        variant!(result, Next(Partial) => ());
-    }
-
-    #[test]
-    fn test_recover_premature_match() {
-        use MatchStrength::*;
-        use SequenceFlow::*;
-
-        let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
-        let opts = SearchOpts::default();
-        let last_match = None;
-
-        // Test path: `x/o/ox/ymoron`.
-
-        let result = sequence_xy
-            .match_component("x", 0, last_match, &opts)
-            .unwrap();
-        let sequence_y =
-            variant!(result, Continue(sequence, Complete) => sequence);
-
-        let result = sequence_y
-            .match_component("o", 1, last_match, &opts)
-            .unwrap();
-        let sequence_xy =
-            variant!(result, Continue(sequence, Naught) => sequence);
-
-        let result = sequence_xy
-            .match_component("ox", 2, last_match, &opts)
-            .unwrap();
-        let sequence_y =
-            variant!(result, Continue(sequence, Partial) => sequence);
-
-        let result = sequence_y
-            .match_component("ymoron", 3, last_match, &opts)
-            .unwrap();
-        variant!(result, Next(Partial) => ());
-    }
-
     #[test]
     fn test_entry_walk() {
         use EntryMatch::*;
@@ -390,7 +312,7 @@ mod test {
         let entry_a = Entry::new("a".into(), vec![sequence], opts);
         let result = entry_a.fire_walk(&search_engine).unwrap();
 
-		// Wildcard matches any (every?) component.
+        // Wildcard matches any (every?) component.
         // path: a/o
         // slices: a/[-]/b
         let entry_ao =

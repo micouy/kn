@@ -1,5 +1,5 @@
-use crate::{Result, Error};
 use super::MatchStrength;
+use crate::{Error, Result};
 
 use regex::Regex;
 
@@ -31,14 +31,14 @@ impl Slice {
         }
     }
 
-	// TODO: Make it return `MatchStrength`.
+    // TODO: Make it return `MatchStrength`.
     pub fn match_component(&self, component: &str) -> SliceMatch {
         use MatchStrength::*;
 
         let component = component.to_ascii_lowercase();
 
         match self {
-			Self::Literal(string) =>
+            Self::Literal(string) =>
                 if component.contains(string) {
                     if string == &component {
                         SliceMatch::Yes(Complete)
@@ -47,7 +47,7 @@ impl Slice {
                     }
                 } else {
                     SliceMatch::No
-                }
+                },
             Self::Wildcard => SliceMatch::Yes(Partial),
         }
     }
@@ -63,8 +63,8 @@ pub enum SliceMatch {
 #[cfg(test)]
 mod test {
     use super::*;
-    use SliceMatch::*;
     use MatchStrength::*;
+    use SliceMatch::*;
 
     #[test]
     fn test_from_string() {
@@ -84,7 +84,8 @@ mod test {
         variant!(slice("X.ae.A-12"), Slice::Literal(literal) if literal == "x.ae.a-12");
 
         // TODO
-        // assert!(variant!(slice("zażółć"), Slice::Literal(literal) => literal == "zażółć"));
+        // assert!(variant!(slice("zażółć"), Slice::Literal(literal) => literal
+        // == "zażółć"));
     }
 
     #[test]
