@@ -4,7 +4,6 @@ use clap::{App, AppSettings, Arg, SubCommand};
 
 /// Creates [`clap::App`](clap::App).
 pub fn app() -> App<'static, 'static> {
-    #[cfg(feature = "log")]
     log::trace!("create app");
 
     App::new(env!("CARGO_BIN_NAME"))

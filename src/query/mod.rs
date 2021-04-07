@@ -1,13 +1,14 @@
 #[allow(dead_code)]
-use crate::{utils::as_path, Error, Result};
+use crate::{Error, Result};
 
-use std::{collections::VecDeque, path::PathBuf};
+use std::{
+    collections::VecDeque,
+    path::{Path, PathBuf},
+};
 
 use clap::ArgMatches;
 
-#[cfg(feature = "logging")]
 use ansi_term::Colour::{Green, Red};
-#[cfg(feature = "logging")]
 use log::{debug, info};
 
 mod entry;
@@ -16,23 +17,30 @@ mod sequence;
 mod slice;
 
 use entry::Entry;
-use search_engine::SearchEngine;
+use search_engine::{ReadDirEngine, SearchEngine};
 use sequence::Sequence;
+use slice::Slice;
 
 pub fn query(matches: &ArgMatches<'_>) -> Result<Vec<PathBuf>> {
-    let (opts, slices) = parse_args(matches)?;
+    let engine = ReadDirEngine;
+    let (opts, sequences) = parse_args(matches, &engine)?;
 
-    if slices.is_empty() {
+    if sequences.is_empty() {
         return Ok(vec![opts.start_dir]);
     }
 
-    search(opts, slices)
+    search(sequences, opts, &engine)
 }
 
-fn search(opts: SearchOpts, sequences: Vec<Sequence>) -> Result<Vec<PathBuf>> {
+fn search<E>(
+    sequences: Vec<Sequence>,
+    opts: SearchOpts,
+    engine: E,
+) -> Result<Vec<PathBuf>>
+where
+    E: SearchEngine,
+{
     use entry::EntryMatch::*;
-
-    let engine = search_engine::ReadDirEngine;
 
     let mut queue = engine
         .read_dir(&opts.start_dir)
@@ -43,13 +51,11 @@ fn search(opts: SearchOpts, sequences: Vec<Sequence>) -> Result<Vec<PathBuf>> {
     while let Some(entry) = queue.pop_front() {
         match entry.fire_walk(&engine)? {
             DeadEnd => {
-                #[cfg(feature = "logging")]
                 debug!(
                     "Dead end `{}`.",
                     Red.paint(entry.path().to_string_lossy())
                 );
             }
-            #[cfg(feature = "logging")]
             Advancement(children, strength) => {
                 use MatchStrength::*;
 
@@ -76,12 +82,7 @@ fn search(opts: SearchOpts, sequences: Vec<Sequence>) -> Result<Vec<PathBuf>> {
 
                 queue.extend(children.into_iter());
             }
-            #[cfg(not(feature = "logging"))]
-            Advancement(children, _) => {
-                queue.extend(children.into_iter());
-            }
             FullMatch(path, _strength) => {
-                #[cfg(feature = "logging")]
                 info!("Full match `{}`.", entry.path().display());
 
                 // TODO: Push fully matched entries to `found`. Track depths
@@ -109,23 +110,27 @@ pub enum MatchStrength {
     Naught,
 }
 
-fn parse_args(matches: &ArgMatches<'_>) -> Result<(SearchOpts, Vec<Sequence>)> {
-    let mut slices = matches
+fn parse_args<E>(
+    matches: &ArgMatches<'_>,
+    engine: E,
+) -> Result<(SearchOpts, Vec<Sequence>)>
+where
+    E: SearchEngine,
+{
+    let mut sequences = matches
         .values_of("SLICES")
-        .ok_or(dev_err!("required `clap` arg absent"))?
-        .peekable();
+        .ok_or(dev_err!("required `clap` arg absent"))?;
 
-    if slices.is_empty() {
-        return Err(dev_err!("required `clap` arg empty"));
-    }
+    let first_arg = sequences
+        .next()
+        .ok_or(dev_err!("required `clap` arg empty"))?;
+    let (start_dir, mb_first_sequence) = extract_start_dir(first_arg, engine)?;
 
-    let start_dir = slices
-        .next_if(|first| as_path(first).is_dir())
-        .map(|first| Ok(PathBuf::from(first)))
-        .unwrap_or_else(|| std::env::current_dir())?;
-
-    let slices = slices
-        .map(|slice| Sequence::from_str(slice))
+    let sequences = sequences.map(|slice| Sequence::from_str(slice));
+    let sequences = mb_first_sequence
+        .map(|sequence| Ok(sequence))
+        .into_iter()
+        .chain(sequences)
         .collect::<Result<Vec<_>>>()?;
 
     let first_depth = matches
@@ -146,17 +151,135 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<(SearchOpts, Vec<Sequence>)> {
         start_dir,
     };
 
-    Ok((opts, slices))
+    Ok((opts, sequences))
+}
+
+fn extract_start_dir<E, P>(
+    path: P,
+    engine: E,
+) -> Result<(PathBuf, Option<Sequence>)>
+where
+    P: AsRef<Path>,
+    E: SearchEngine,
+{
+    // TODO: Remove repetition.
+
+    use std::path::Component::*;
+
+    let mut prefix = path.as_ref().components();
+    let mut rejected = VecDeque::new();
+
+    loop {
+        let subpath = prefix.as_path();
+
+        if engine.is_dir(subpath) {
+            let start_dir = subpath.into();
+            let slices = rejected
+                .into_iter()
+                .map(|component| match component {
+                    Normal(os_str) => {
+                        let string = os_str.to_string_lossy().into_owned();
+
+                        Slice::from_string(string)
+                    }
+                    _ => Err(Error::InvalidSlice(format!(
+                        "{:?}",
+                        component.as_os_str()
+                    ))),
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let sequence = if slices.is_empty() {
+                None
+            } else {
+                Some(Sequence {
+                    slices,
+                    slice_to_match: 0,
+                })
+            };
+
+            return Ok((start_dir, sequence));
+        }
+
+        match prefix.next_back() {
+            Some(component) => rejected.push_front(component),
+            None => break,
+        }
+    }
+
+    let start_dir = std::env::current_dir()?;
+    let slices =
+        rejected
+            .into_iter()
+            .map(|component| match component {
+                Normal(os_str) => {
+                    let string = os_str.to_string_lossy().into_owned();
+
+                    Slice::from_string(string)
+                }
+                _ => Err(Error::InvalidSlice(format!(
+                    "{:?}",
+                    component.as_os_str()
+                ))),
+            })
+            .collect::<Result<Vec<_>>>()?;
+    let sequence = if slices.is_empty() {
+        None
+    } else {
+        Some(Sequence {
+            slices,
+            slice_to_match: 0,
+        })
+    };
+
+    return Ok((start_dir, sequence));
 }
 
 #[cfg(test)]
 mod test {
-    use super::{entry::EntryMatch, *};
+    use super::{entry::EntryMatch, slice::Slice, *};
     use crate::utils::as_path;
 
     use EntryMatch::*;
 
     use std::collections::HashMap;
+
+    #[test]
+    fn test_extract_start_dir() {
+        let mut search_engine = HashMap::new();
+
+        search_engine.insert("ax".into(), vec!["ox".into()]);
+        search_engine.insert("ax/ox".into(), vec![]);
+        let (start_dir, first) =
+            extract_start_dir("ax/ox/ex", &search_engine).unwrap();
+        let first = first.unwrap();
+
+        assert_eq!(start_dir, as_path("ax/ox"));
+        variant!(&first.slices()[0], Slice::Literal(literal) if literal == "ex");
+
+        search_engine.insert("/".into(), vec!["gniazdo-os".into()]);
+        search_engine.insert("/gniazdo-os".into(), vec![]);
+        let (start_dir, first) =
+            extract_start_dir("/gn", &search_engine).unwrap();
+        let first = first.unwrap();
+
+        assert_eq!(start_dir, as_path("/"));
+        variant!(&first.slices()[0], Slice::Literal(literal) if literal == "gn");
+
+        search_engine.insert("~".into(), vec!["dodo".into()]);
+        search_engine.insert("~/dodo".into(), vec![]);
+        let (start_dir, first) =
+            extract_start_dir("~/do", &search_engine).unwrap();
+        let first = first.unwrap();
+
+        assert_eq!(start_dir, as_path("~"));
+        variant!(&first.slices()[0], Slice::Literal(literal) if literal == "do");
+
+        let (start_dir, first) =
+            extract_start_dir("~/dodo", &search_engine).unwrap();
+
+        assert_eq!(start_dir, as_path("~/dodo"));
+        assert!(first.is_none());
+    }
 
     #[test]
     fn test_entry_walk() {

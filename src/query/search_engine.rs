@@ -8,6 +8,10 @@ pub trait SearchEngine {
     fn read_dir<P>(&self, dir: P) -> Vec<PathBuf>
     where
         P: AsRef<Path>;
+
+    fn is_dir<P>(&self, path: P) -> bool
+    where
+        P: AsRef<Path>;
 }
 
 pub struct ReadDirEngine;
@@ -33,6 +37,13 @@ impl SearchEngine for ReadDirEngine {
             })
             .unwrap_or_else(|_| vec![])
     }
+
+    fn is_dir<P>(&self, path: P) -> bool
+    where
+        P: AsRef<Path>,
+    {
+        path.as_ref().is_dir()
+    }
 }
 
 impl SearchEngine for HashMap<PathBuf, Vec<PathBuf>> {
@@ -43,6 +54,13 @@ impl SearchEngine for HashMap<PathBuf, Vec<PathBuf>> {
         self.get(dir.as_ref())
             .map(|children| children.clone())
             .unwrap_or_else(|| vec![])
+    }
+
+    fn is_dir<P>(&self, path: P) -> bool
+    where
+        P: AsRef<Path>,
+    {
+        self.contains_key(path.as_ref())
     }
 }
 
@@ -55,5 +73,12 @@ where
         P: AsRef<Path>,
     {
         (*self).read_dir(dir)
+    }
+
+    fn is_dir<P>(&self, path: P) -> bool
+    where
+        P: AsRef<Path>,
+    {
+        (*self).is_dir(path)
     }
 }

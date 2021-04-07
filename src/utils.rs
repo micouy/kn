@@ -1,4 +1,7 @@
-use std::{convert::AsRef, path::Path};
+use std::{
+    convert::AsRef,
+    path::{Path, PathBuf},
+};
 
 pub fn as_path<P>(path: &P) -> &Path
 where
@@ -35,11 +38,7 @@ macro_rules! dev_err {
     };
 }
 
-#[cfg(feature = "logging")]
-pub fn paint_file_name(
-    mut path: std::path::PathBuf,
-    color: ansi_term::Color,
-) -> String {
+pub fn paint_file_name(mut path: PathBuf, color: ansi_term::Color) -> String {
     let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
     let file_name = color.paint(file_name);
 

@@ -5,13 +5,12 @@ use super::{
 };
 use crate::{Error, Result};
 
-#[cfg(feature = "logging")]
 use log::debug;
 
 #[derive(Clone, Debug)]
 pub struct Sequence {
-    slice_to_match: usize,
-    slices: Vec<Slice>,
+    pub(super) slice_to_match: usize,
+    pub(super) slices: Vec<Slice>,
 }
 
 impl Sequence {
@@ -65,7 +64,6 @@ impl Sequence {
                     Some(last_match) =>
                         if let Some(next_depth) = opts.next_depth {
                             if (last_match + next_depth + 1) <= attempt {
-                                #[cfg(feature = "logging")]
                                 if let Slice::Literal(string) = slice {
                                     debug!("Dead end. {} vs {}. Already at allowed `next_depth`.", string, component);
                                 }
@@ -76,7 +74,6 @@ impl Sequence {
                     None =>
                         if let Some(first_depth) = opts.first_depth {
                             if first_depth <= attempt {
-                                #[cfg(feature = "logging")]
                                 if let Slice::Literal(string) = slice {
                                     debug!("Dead end. {} vs {}. Already at allowed `first_depth`.", string, component);
                                 }
@@ -96,6 +93,10 @@ impl Sequence {
         };
 
         Ok(result)
+    }
+
+    pub fn slices(&self) -> &[Slice] {
+        &self.slices
     }
 }
 
