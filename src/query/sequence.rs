@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{Error, Result};
 
-#[cfg(feature = "log")]
+#[cfg(feature = "logging")]
 use log::debug;
 
 use regex::Regex;
@@ -90,7 +90,7 @@ impl Sequence {
                     Some(last_match) =>
                         if let Some(next_depth) = opts.next_depth {
                             if (last_match + next_depth + 1) <= attempt {
-                                #[cfg(feature = "log")]
+                                #[cfg(feature = "logging")]
                                 debug!("Dead end. {} vs {}. Already at allowed `next_depth`.", slice.0, component);
 
                                 return Ok(SequenceFlow::DeadEnd);
@@ -99,7 +99,7 @@ impl Sequence {
                     None =>
                         if let Some(first_depth) = opts.first_depth {
                             if first_depth <= attempt {
-                                #[cfg(feature = "log")]
+                                #[cfg(feature = "logging")]
                                 debug!("Dead end. {} vs {}. Already at allowed `first_depth`.", slice.0, component);
 
                                 return Ok(SequenceFlow::DeadEnd);
