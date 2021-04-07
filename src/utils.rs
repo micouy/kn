@@ -33,3 +33,17 @@ macro_rules! dev_err {
         }
     };
 }
+
+#[cfg(feature = "logging")]
+pub fn paint_file_name(
+    mut path: std::path::PathBuf,
+    color: ansi_term::Color,
+) -> String {
+    let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
+    let file_name = color.paint(file_name);
+
+    path.pop();
+    let rest = path.to_string_lossy();
+
+    format!("{}/{}", rest, file_name)
+}

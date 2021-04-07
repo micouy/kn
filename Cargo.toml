@@ -18,3 +18,7 @@ thiserror = "1.0"
 pretty_env_logger = "*"
 log = "*"
 tera = { version = "1", default-features = false }
+ansi_term = "*"
+
+[features]
+logging = []

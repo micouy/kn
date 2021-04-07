@@ -1,21 +1,23 @@
 #[allow(dead_code)]
 use crate::{utils::as_path, Error, Result};
 
-use std::{
-    collections::{HashMap, VecDeque},
-    path::{Path, PathBuf},
-};
+use std::{collections::VecDeque, path::PathBuf};
 
 use clap::ArgMatches;
+
+#[cfg(feature = "logging")]
+use ansi_term::Colour::{Green, Red};
+#[cfg(feature = "logging")]
+use log::{debug, info};
 
 mod entry;
 mod search_engine;
 mod sequence;
 mod slice;
 
-use entry::{Entry, EntryMatch};
-use search_engine::{ReadDirEngine, SearchEngine};
-use sequence::{Sequence, SequenceFlow};
+use entry::Entry;
+use search_engine::SearchEngine;
+use sequence::Sequence;
 
 pub fn query(matches: &ArgMatches<'_>) -> Result<Vec<PathBuf>> {
     let (opts, slices) = parse_args(matches)?;
@@ -40,11 +42,48 @@ fn search(opts: SearchOpts, sequences: Vec<Sequence>) -> Result<Vec<PathBuf>> {
 
     while let Some(entry) = queue.pop_front() {
         match entry.fire_walk(&engine)? {
-            DeadEnd => {}
-            Advancement(children, _strength) => {
+            DeadEnd => {
+                #[cfg(feature = "logging")]
+                debug!(
+                    "Dead end `{}`.",
+                    Red.paint(entry.path().to_string_lossy())
+                );
+            }
+            #[cfg(feature = "logging")]
+            Advancement(children, strength) => {
+                use MatchStrength::*;
+
+                match strength {
+                    Complete | Partial => {
+                        info!(
+                            "Advancement `{}`.",
+                            crate::utils::paint_file_name(
+                                entry.path().into(),
+                                Green
+                            )
+                        );
+                    }
+                    Naught => {
+                        info!(
+                            "Advancement `{}`.",
+                            crate::utils::paint_file_name(
+                                entry.path().into(),
+                                Red
+                            )
+                        );
+                    }
+                }
+
+                queue.extend(children.into_iter());
+            }
+            #[cfg(not(feature = "logging"))]
+            Advancement(children, _) => {
                 queue.extend(children.into_iter());
             }
             FullMatch(path, _strength) => {
+                #[cfg(feature = "logging")]
+                info!("Full match `{}`.", entry.path().display());
+
                 // TODO: Push fully matched entries to `found`. Track depths
                 // and reject entries deeper than the ones in `found`.
                 return Ok(vec![path]);
@@ -112,8 +151,12 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<(SearchOpts, Vec<Sequence>)> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{entry::EntryMatch, sequence::SequenceFlow, *};
     use crate::utils::as_path;
+
+    use std::collections::HashMap;
+
+    // TODO: Add tests with multiple sequences and different options.
 
     #[test]
     fn test_sequence_from_str() {

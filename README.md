@@ -85,8 +85,8 @@ $ kn tes fo iz
 
 The combination of all of the above probably helps narrow down the search to a tiny fraction of what the first version of `kn` did.
 - [ ] ~Try to interpret the longest sequence of glued slices as a literal path~ Try to interpret each slice as a literal and ignore other matches by those slices?
-- [ ] Make the search engine generic and add tests with a mock file system/search engine.
-- [ ] Add `--help` to `se` function. (How?)
+- [x] Make the search engine generic and add tests with a mock file system/search engine.
+- [ ] Add `--help` to `kn` function. (How?)
 - [ ] Use `-` as a wildcard pattern. (Any alternatives to "-"?)
 - [ ] Compare slices with `str::match` instead of matching regex? Constructing regex from user's input seems hacky, even if it's validated.
 - [ ] Make `kn` somewhat interactive. Tab could confirm the path `kn` has found so far and the search could begin from that location. That would narrow down the search. (Is that possible with `fish` and other shells?)
@@ -94,5 +94,5 @@ The combination of all of the above probably helps narrow down the search to a t
   - [x] `--max-space` - Max space between slices. With space 2 `kn a b` would match `a/x/x/b` but not `a/x/x/x/b`.
   - [x] `--max-distance` - Max distance from start dir to the first match. Right now `kn` continues to search paths even if they do not match the slices in case their children match.
   - [ ] Fail quietly on invalid args? How to configure `clap`?
-  - [ ] Respect options in search.
+  - [x] Respect options in search.
 - [ ] Use inodes instead of traversing the directory structure using `read_dir()`. [Guide.](https://fasterthanli.me/series/reading-files-the-hard-way)

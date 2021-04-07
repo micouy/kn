@@ -73,8 +73,15 @@ impl Entry {
                         .get(1..)
                         .ok_or(dev_err!("entry with no sequences"))?;
 
-                    let children =
-                        self.get_children(sequences.to_vec(), engine);
+                    let last_match = Some(self.attempt_count); // Update last match.
+                    let children = Self::get_children(
+                        &self.path,
+                        self.attempt_count + 1,
+                        &self.opts,
+                        last_match,
+                        &sequences,
+                        engine,
+                    );
 
                     Advancement(children, strength)
                 }
@@ -86,7 +93,14 @@ impl Entry {
                     .ok_or(dev_err!("entry with no sequences"))?;
                 *first_sequence = sequence;
 
-                let children = self.get_children(sequences, engine);
+                let children = Self::get_children(
+                    &self.path,
+                    self.attempt_count + 1,
+                    &self.opts,
+                    self.last_match,
+                    &sequences,
+                    engine,
+                );
 
                 Advancement(children, strength)
             }
@@ -96,19 +110,27 @@ impl Entry {
         Ok(result)
     }
 
-    fn get_children<E>(&self, sequences: Vec<Sequence>, engine: E) -> Vec<Entry>
+    fn get_children<P, E>(
+        path: P,
+        attempt_count: usize,
+        opts: &SearchOpts,
+        last_match: Option<usize>,
+        sequences: &[Sequence],
+        engine: E,
+    ) -> Vec<Entry>
     where
+        P: AsRef<Path>,
         E: SearchEngine,
     {
         engine
-            .read_dir(&self.path)
+            .read_dir(path)
             .into_iter()
             .map(|child_path| Entry {
-                attempt_count: self.attempt_count + 1,
-                sequences: sequences.clone(),
+                attempt_count,
+                sequences: sequences.to_vec(),
                 path: child_path,
-                opts: self.opts.clone(),
-                last_match: None,
+                opts: opts.clone(),
+                last_match,
             })
             .collect()
     }
