@@ -369,4 +369,40 @@ mod test {
         let _entry_aoa =
             variant!(result, Advancement(children, _) => children[0].clone());
     }
+
+    #[test]
+    fn test_wildcard() {
+        use EntryMatch::*;
+
+        let opts = SearchOpts {
+            first_depth: Some(0),
+            next_depth: Some(0),
+            ..Default::default()
+        };
+
+        let mut search_engine = HashMap::new();
+        search_engine.insert("a".into(), vec!["a/o".into()]);
+        search_engine.insert("a/o".into(), vec!["a/o/b".into()]);
+
+        // path: [a]
+        // slices: [a]/-/b
+        let sequence: Sequence = Sequence::from_str("a/-/b").unwrap();
+        let entry_a = Entry::new("a".into(), vec![sequence], opts);
+        let result = entry_a.fire_walk(&search_engine).unwrap();
+
+		// Wildcard matches any (every?) component.
+        // path: a/o
+        // slices: a/[-]/b
+        let entry_ao =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_ao.fire_walk(&search_engine).unwrap();
+
+        // path: a/o/b
+        // slices: a/-/[b]
+        let entry_aob =
+            variant!(result, Advancement(children, _) => children[0].clone());
+        let result = entry_aob.fire_walk(&search_engine).unwrap();
+
+        variant!(result, FullMatch(_, _));
+    }
 }

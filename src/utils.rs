@@ -7,18 +7,19 @@ where
     path.as_ref()
 }
 
+// Inspired by `https://doc.rust-lang.org/stable/std/macro.matches.html`.
 #[cfg(test)]
 macro_rules! variant {
-    ($expression_in:expr, $pattern:pat => $expression_out:expr) => {
+    ($expression_in:expr , $( $pattern:pat )|+ $( if $guard: expr )? $( => $expression_out:expr )? ) => {
         match $expression_in {
-            $pattern => $expression_out,
+            $( $pattern )|+ $( if $guard )? => { $( $expression_out )? },
             variant => panic!("{:?}", variant),
         }
     };
 
-    ($expression_in:expr, $pattern:pat => $expression_out:expr, $panic:expr) => {
+    ($expression_in:expr , $( $pattern:pat )|+ $( if $guard: expr )? $( => $expression_out:expr)? , $panic:expr) => {
         match $expression_in {
-            $pattern => $expression_out,
+            $( $pattern )|+ $( if $guard )? => { $( $expression_out )? },
             _ => panic!($panic),
         }
     };

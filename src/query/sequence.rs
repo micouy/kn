@@ -8,8 +8,6 @@ use crate::{Error, Result};
 #[cfg(feature = "logging")]
 use log::debug;
 
-use regex::Regex;
-
 #[derive(Clone, Debug)]
 pub struct Sequence {
     slice_to_match: usize,
@@ -18,32 +16,10 @@ pub struct Sequence {
 
 impl Sequence {
     pub fn from_str(slices: &str) -> Result<Self> {
-        let only_valid_re = Regex::new(r"^[\-_.a-zA-Z0-9]+$").unwrap();
-        let only_dots_re = Regex::new(r"^\.+$").unwrap();
-
-        let is_valid = |slice: &str| {
-            if slice.is_empty() {
-                return false;
-            }
-            if !only_valid_re.is_match(slice) {
-                return false;
-            };
-            if only_dots_re.is_match(slice) {
-                return false;
-            };
-
-            return true;
-        };
 
         let slices = slices
             .split("/")
-            .map(|slice| {
-                if !is_valid(slice) {
-                    Err(Error::InvalidSliceSequence(slices.to_string()))
-                } else {
-                    Ok(Slice(slice.to_string()))
-                }
-            })
+            .map(|pattern| Slice::from_string(pattern.to_string()))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
@@ -91,7 +67,9 @@ impl Sequence {
                         if let Some(next_depth) = opts.next_depth {
                             if (last_match + next_depth + 1) <= attempt {
                                 #[cfg(feature = "logging")]
-                                debug!("Dead end. {} vs {}. Already at allowed `next_depth`.", slice.0, component);
+                                if let Slice::Literal(string) = slice {
+                                    debug!("Dead end. {} vs {}. Already at allowed `next_depth`.", string, component);
+                                }
 
                                 return Ok(SequenceFlow::DeadEnd);
                             }
@@ -100,7 +78,9 @@ impl Sequence {
                         if let Some(first_depth) = opts.first_depth {
                             if first_depth <= attempt {
                                 #[cfg(feature = "logging")]
-                                debug!("Dead end. {} vs {}. Already at allowed `first_depth`.", slice.0, component);
+                                if let Slice::Literal(string) = slice {
+                                    debug!("Dead end. {} vs {}. Already at allowed `first_depth`.", string, component);
+                                }
 
                                 return Ok(SequenceFlow::DeadEnd);
                             }
