@@ -10,25 +10,25 @@
 1. `git clone https://github.com/micouy/kn.git`
 2. `cd kn`
 3. Put the binary in a folder that is in `PATH` so that it can be accessed by the script:
-  
-  `cargo build -Z unstable-options --out-dir DESTINATION --release`
+
+   `cargo build -Z unstable-options --out-dir DESTINATION --release`
 4. Change the config of your shell:
-  
-  * `fish` (usually `~/.config/fish/fish.config`):
-  
-    `_kn init fish | source`
-  * `bash` (usually `~/.bashrc`):
-  
-    `eval "$(_kn init bash)"`
-    
-  * `zsh` (usually `~/.zsh`):
-  
-    `eval "$(_kn init zsh)"`
+
+   * `fish` (usually `~/.config/fish/fish.config`):
+
+     `_kn init fish | source`
+   * `bash` (usually `~/.bashrc`):
+
+     `eval "$(_kn init bash)"`
+
+   * `zsh` (usually `~/.zsh`):
+
+     `eval "$(_kn init zsh)"`
 5. You can set options by passing args to `_kn init` in your config file. For example in `fish` you do it like this:
-  
-  `_kn init fish --first-max-depth 3 --next-max-depth 3 | source`
-  
-  Read more about options below.
+
+   `_kn init fish --first-max-depth 3 --next-max-depth 3 | source`
+
+   Read more about options below.
 6. After reloading the config or launching a new shell instance you'll be able to use `kn`.
 
 
