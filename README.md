@@ -9,15 +9,16 @@ The project is in it's alpha stage. For now it only works with `fish` shell.
 1. `git clone https://github.com/micouy/kn.git`
 2. `cd kn`
 3. Put the binary in a folder that is in `PATH` so that it can be accessed by the script:
-  
-  `cargo build -Z unstable-options --out-dir DESTINATION --release`
+   
+   asdfasdfasdf
+   `cargo build -Z unstable-options --out-dir DESTINATION --release`
 4. Put this line in your `config.fish`:
   
-  `_kn init fish | source`
+   `_kn init fish | source`
   
-  You can set options like this:
+   You can set options like this:
   
-  `_kn init fish --first-max-depth 3 --next-max-depth 3 | source`
+   `_kn init fish --first-max-depth 3 --next-max-depth 3 | source`
 5. After launching a new `fish` instance or reloading the config with `source YOUR_FISH_CONFIG_PATH` you'll be able to use the `kn` command.
 
 
