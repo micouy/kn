@@ -10,7 +10,6 @@ The project is in it's alpha stage. For now it only works with `fish` shell.
 2. `cd kn`
 3. Put the binary in a folder that is in `PATH` so that it can be accessed by the script:
    
-   asdfasdfasdf
    `cargo build -Z unstable-options --out-dir DESTINATION --release`
 4. Put this line in your `config.fish`:
   
