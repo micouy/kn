@@ -14,7 +14,7 @@
    `cargo build -Z unstable-options --out-dir DESTINATION --release`
 4. Change the config of your shell:
 
-   * `fish` (usually `~/.config/fish/fish.config`):
+   * `fish` (usually `~/.config/fish/config.fish`):
 
      `_kn init fish | source`
    * `bash` (usually `~/.bashrc`):
@@ -77,7 +77,7 @@ $ kn tes/-/baz      # enter test-dir/foo/bazz
 
 # Options
 
-* `--first-max-depth` sets the max depth at which the first match must occur. If set to 0, the first match must occur directly in the start dir.
+* `--first-max-depth` sets the max depth at which the first match must occur. If set to 0, the first match must occur directly in the start dir. This works well if you want `kn` to work just like `cd` but with shortcuts for dir names.
 * `--next-max-depth` sets the max relative depth at which each successive match must occur. If set to 0, each match must occur directly inside the previously matched dir.
 
 
@@ -93,6 +93,9 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 
 ## Patterns/Slices
 
+- [ ] Remove loose slices?
+
+  Rationale: This would allow `kn` to be good at one thing. It would be just like `cd`, just easier to use. It could guess dir names instead of matching literals and the search times would be much shorter. It would be much more predictable too and would play nicely with interactive mode.
 - [x] Use slashes to enforce "glued" slices (slices that must be matched one right after the other). Use spaces to allow for "loose" slices (slices that can be matched a number of components apart from each other).
   - [x] Add `PathSlice::Glued` and `PathSlice::Loose`. ~For now `kn` only uses `PathSlice::Loose`.~
   - [x] Parse args properly.
@@ -122,6 +125,7 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 - [ ] Add `--help` to `kn` function. (How?)
 - [ ] Return all matched results at the same depth (maybe order them in some way) and make the shell script decide which one to use.
 - [x] Add support for other shells.
+- [ ] Read about [`broot`](https://github.com/Canop/broot).
 
 
 ## Search engine
