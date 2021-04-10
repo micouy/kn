@@ -1,148 +1,130 @@
-use super::{
-    search_engine::SearchEngine,
-    sequence::{Sequence, SequenceFlow},
-    MatchStrength,
-    SearchOpts,
-};
 use crate::{Error, Result};
 
-use std::path::{Path, PathBuf};
+
+use super::{
+    abbr::{Abbr, Congruence},
+    search_engine::SearchEngine,
+};
+
+
+use std::{
+    borrow::Cow,
+    path::{Path, PathBuf},
+};
+
 
 #[derive(Debug, Clone)]
-pub struct Entry {
-    sequences: Vec<Sequence>,
-    path: PathBuf,
-    opts: SearchOpts,
-    attempt_count: usize,
-    last_match: Option<usize>,
+pub struct Entry<'a> {
+    abbr: &'a Abbr,
+    rest: &'a [Abbr],
+    pub(super) path: PathBuf,
+    congruence: Vec<Congruence>,
 }
 
-impl Entry {
+
+impl<'a> Entry<'a> {
     pub fn new(
         path: PathBuf,
-        sequences: Vec<Sequence>,
-        opts: SearchOpts,
-    ) -> Self {
-        Self {
-            path,
-            sequences,
-            opts,
-            attempt_count: 0,
-            last_match: None,
+        abbr: &'a Abbr,
+        rest: &'a [Abbr],
+    ) -> Result<Self> {
+        // Safety check. Return error on wildcard at last place.
+        if let (Abbr::Wildcard, []) = (abbr, rest) {
+            return Err(Error::WildcardAtLastPlace);
         }
-    }
 
-    pub fn attempt(&self) -> usize {
-        self.attempt_count
+        Ok(Self {
+            path,
+            abbr,
+            rest,
+            congruence: vec![],
+        })
     }
 
     pub fn path(&self) -> &Path {
         self.path.as_path()
     }
 
-    pub fn read_dir<E>(&self, engine: E) -> Result<EntryMatch>
+    pub fn n_attempts(&self) -> usize {
+        self.congruence.len()
+    }
+
+    pub fn congruence(&self) -> &[Congruence] {
+        self.congruence.as_slice()
+    }
+
+    pub fn advance<E>(&self, engine: E) -> Flow<'a>
     where
         E: SearchEngine,
     {
-        use EntryMatch::*;
-
         let component = self
             .path
             .file_name()
-            .ok_or(dev_err!("no filename in entry path"))?
-            .to_string_lossy();
-
-        let sequence = self
-            .sequences
-            .get(0)
-            .ok_or(dev_err!("invalid current sequence index"))?;
-
-        let sequence_match = sequence.match_component(
-            &component,
-            self.attempt_count,
-            self.last_match,
-            &self.opts,
-        )?;
-
-        let result = match sequence_match {
-            SequenceFlow::Next(strength) => {
-                let is_last = (self.sequences.len() <= 1);
-
-                if is_last {
-                    FullMatch(self.path.clone(), strength)
-                } else {
-                    let sequences = self
-                        .sequences
-                        .get(1..)
-                        .ok_or(dev_err!("entry with no sequences"))?;
-
-                    // Update last match.
-                    let last_match = Some(self.attempt_count);
-                    let children = Self::get_children(
-                        &self.path,
-                        self.attempt_count + 1,
-                        &self.opts,
-                        last_match,
-                        &sequences,
-                        engine,
-                    );
-
-                    Advancement(children, strength)
-                }
-            }
-            SequenceFlow::Continue(sequence, strength) => {
-                let mut sequences = self.sequences.clone();
-                let first_sequence = sequences
-                    .get_mut(0)
-                    .ok_or(dev_err!("entry with no sequences"))?;
-                *first_sequence = sequence;
-
-                let children = Self::get_children(
-                    &self.path,
-                    self.attempt_count + 1,
-                    &self.opts,
-                    self.last_match,
-                    &sequences,
-                    engine,
-                );
-
-                Advancement(children, strength)
-            }
-            SequenceFlow::DeadEnd => DeadEnd,
+            .map(|file_name| file_name.to_string_lossy());
+        let component: Cow<_> = match component {
+            None => return Flow::DeadEnd,
+            Some(component) => component,
         };
 
-        Ok(result)
+
+        let congruence = self.abbr.compare(&component);
+
+        match congruence {
+            Some(next_congruence) => match self.rest {
+                [abbr, rest @ ..] => {
+                    let mut congruence = self.congruence.clone();
+                    congruence.push(next_congruence);
+
+                    let children = Self::construct_children(
+                        &self.path, abbr, rest, congruence, engine,
+                    );
+
+                    Flow::Continue(children)
+                }
+                [] => {
+                    let mut congruence = self.congruence.clone();
+                    congruence.push(next_congruence);
+
+                    let entry = Entry {
+                        congruence,
+                        path: self.path.clone(),
+                        ..*self
+                    };
+
+                    Flow::FullMatch(entry)
+                }
+            },
+            None => Flow::DeadEnd,
+        }
     }
 
-    fn get_children<P, E>(
-        path: P,
-        attempt_count: usize,
-        opts: &SearchOpts,
-        last_match: Option<usize>,
-        sequences: &[Sequence],
+    fn construct_children<E>(
+        path: &Path,
+        abbr: &'a Abbr,
+        rest: &'a [Abbr],
+        congruence: Vec<Congruence>,
         engine: E,
-    ) -> Vec<Entry>
+    ) -> Vec<Entry<'a>>
     where
-        P: AsRef<Path>,
         E: SearchEngine,
     {
         engine
             .read_dir(path)
-            .into_iter()
+            .iter()
             .map(|child_path| Entry {
-                attempt_count,
-                sequences: sequences.to_vec(),
-                path: child_path,
-                opts: opts.clone(),
-                last_match,
+                path: child_path.into(),
+                congruence: congruence.clone(),
+                abbr,
+                rest,
             })
             .collect()
     }
 }
 
+
 #[derive(Debug)]
-pub enum EntryMatch {
-    Advancement(Vec<Entry>, MatchStrength),
-    FullMatch(PathBuf, MatchStrength),
+pub enum Flow<'a> {
+    Continue(Vec<Entry<'a>>),
+    FullMatch(Entry<'a>),
     DeadEnd,
 }

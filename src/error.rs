@@ -2,6 +2,7 @@
 
 use thiserror::Error;
 
+
 /// `kn` error.
 #[derive(Debug, Error)]
 pub enum Error {
@@ -11,12 +12,25 @@ pub enum Error {
         file: &'static str,
         cause: String,
     },
-    #[error("Invalid slice: `{0}`.")]
-    InvalidSlice(String),
-    #[error("Invalid value for arg `{0}`.")]
+
+    #[error("Abbreviation `{0}` is invalid.")]
+    InvalidAbbr(String),
+
+    #[error("Value of arg `{0}` is invalid.")]
     InvalidArgValue(String),
+
     #[error(transparent)]
     IO(#[from] std::io::Error),
+
     #[error("No path found.")]
     NoPathFound,
+
+    #[error("Abbreviation is empty.")]
+    EmptyAbbr,
+
+    #[error("Arg contains invalid UTF-8.")]
+    ArgInvalidUnicode,
+
+    #[error("Abbreviation contains wildcard at the last place.")]
+    WildcardAtLastPlace,
 }

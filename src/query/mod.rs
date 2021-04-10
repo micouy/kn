@@ -1,636 +1,307 @@
 #[allow(dead_code)]
-use crate::{Error, Result};
+use crate::{utils::as_path, Error, Result};
 
 use std::{
     collections::VecDeque,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
-use clap::ArgMatches;
 
-use ansi_term::Colour::{Green, Red};
+use ansi_term::Colour::Red;
+use clap::ArgMatches;
 use log::{debug, info, trace};
 
+
+mod abbr;
 mod entry;
 mod search_engine;
-mod sequence;
-mod slice;
 
+
+use abbr::Abbr;
 use entry::Entry;
 use search_engine::{ReadDirEngine, SearchEngine};
-use sequence::Sequence;
-use slice::Slice;
+
 
 pub fn query(matches: &ArgMatches<'_>) -> Result<Vec<PathBuf>> {
     trace!("Handling query.");
 
+
     let engine = ReadDirEngine;
-    let (opts, sequences) = parse_args(matches, &engine)?;
+    let (start_path, abbr) = parse_args(matches)?;
 
-    if sequences.is_empty() {
-        trace!("Only starting dir provided, returning.");
-        return Ok(vec![opts.start_dir]);
+    trace!("Start path: `{}`.", start_path.display());
+
+    match abbr.as_slice() {
+        [first, rest @ ..] => search(start_path, first, rest, &engine),
+        [] => {
+            trace!("Only starting dir provided, returning.");
+
+
+            return Ok(vec![start_path]);
+        }
     }
-
-    search(sequences, opts, &engine)
 }
 
-fn search<E>(
-    sequences: Vec<Sequence>,
-    opts: SearchOpts,
+
+fn search<P, E>(
+    start_path: P,
+    abbr: &Abbr,
+    rest: &[Abbr],
     engine: E,
 ) -> Result<Vec<PathBuf>>
 where
+    P: AsRef<Path>,
     E: SearchEngine,
 {
-    use entry::EntryMatch::*;
+    use entry::Flow::*;
+
 
     let mut queue = engine
-        .read_dir(&opts.start_dir)
+        .read_dir(start_path)
         .into_iter()
-        .map(|subdir| Entry::new(subdir, sequences.clone(), opts.clone()))
-        .collect::<VecDeque<_>>();
+        .map(|subdir| Entry::new(subdir, abbr, rest))
+        .collect::<Result<VecDeque<_>>>()?;
 
 
-    let mut found: Option<(usize, Vec<PathBuf>)> = None;
+    let mut found: Option<(usize, Vec<Entry>)> = None;
 
     while let Some(entry) = queue.pop_front() {
         // Reject entries that are deeper than the ones in `found`.
         if let Some((depth, _)) = found {
-            if entry.attempt() > depth {
+            if entry.n_attempts() > depth {
                 continue;
             }
         }
 
-        match entry.read_dir(&engine)? {
+        match entry.advance(&engine) {
             DeadEnd => {
                 debug!(
                     "Dead end `{}`.",
                     Red.paint(entry.path().to_string_lossy())
                 );
             }
-            Advancement(children, strength) => {
-                use MatchStrength::*;
-
-                match strength {
-                    Complete | Partial => {
-                        info!(
-                            "Advancement `{}`.",
-                            crate::utils::paint_file_name(
-                                entry.path().into(),
-                                Green
-                            )
-                        );
-                    }
-                    Naught => {
-                        info!(
-                            "Advancement `{}`.",
-                            crate::utils::paint_file_name(
-                                entry.path().into(),
-                                Red
-                            )
-                        );
-                    }
-                }
-
+            Continue(children) => {
+                info!("Continue down `{}`.", entry.path().display());
                 queue.extend(children.into_iter());
             }
-            FullMatch(path, _strength) => {
+            FullMatch(entry) => {
                 info!("Full match `{}`.", entry.path().display());
 
                 // Update `found`.
                 match found {
-                    Some((_, ref mut paths)) => paths.push(path),
-                    None => found = Some((entry.attempt(), vec![path])),
+                    Some((_, ref mut entries)) => entries.push(entry),
+                    None => found = Some((entry.n_attempts(), vec![entry])),
                 }
             }
         }
     }
 
+
     match found {
-        Some((_, paths)) => Ok(paths),
+        Some((_, entries)) => {
+            // TODO: Return an object containing details about matches?
+            trace!("Found entries:");
+
+            for entry in &entries {
+                trace!("Path: `{}`.", entry.path().display());
+                trace!("Congruence: `{:?}`.", entry.congruence());
+            }
+
+
+            let paths = get_ordered_paths(entries);
+
+            Ok(paths)
+        }
         None => Err(Error::NoPathFound),
     }
 }
 
 
-#[derive(Debug, Clone, Default)]
-pub struct SearchOpts {
-    first_depth: Option<usize>,
-    next_depth: Option<usize>,
-    start_dir: PathBuf,
+fn get_ordered_paths(mut entries: Vec<Entry<'_>>) -> Vec<PathBuf> {
+    entries.sort_by(|a, b| a.congruence().cmp(b.congruence()));
+
+    let paths = entries.into_iter().map(|entry| entry.path).collect();
+
+    paths
 }
 
-#[derive(Clone, Debug)]
-pub enum MatchStrength {
-    Complete,
-    Partial,
-    Naught,
-}
 
-fn parse_args<E>(
-    matches: &ArgMatches<'_>,
-    engine: E,
-) -> Result<(SearchOpts, Vec<Sequence>)>
-where
-    E: SearchEngine,
-{
+fn parse_args(matches: &ArgMatches<'_>) -> Result<(PathBuf, Vec<Abbr>)> {
     trace!("Parsing args.");
 
-    let mut sequences = matches
-        .values_of("SLICES")
+    let abbr = matches
+        .value_of_os("ABBR")
         .ok_or(dev_err!("required `clap` arg absent"))?;
+    let abbr = abbr.to_str().ok_or(Error::ArgInvalidUnicode)?;
 
-    let first_arg = sequences
-        .next()
-        .ok_or(dev_err!("required `clap` arg empty"))?;
-    let (start_dir, mb_first_sequence) = extract_start_dir(first_arg, engine)?;
+    if abbr.is_empty() {
+        return Err(Error::EmptyAbbr);
+    }
 
-    let sequences = sequences.map(|slice| Sequence::from_str(slice));
-    let sequences = mb_first_sequence
-        .map(|sequence| Ok(sequence))
+    let (start_path, suffix) = extract_start_path(as_path(abbr));
+
+    let start_path = start_path
+        .map(|path| Ok(path))
+        .unwrap_or_else(|| std::env::current_dir())?;
+
+    let abbr = suffix
         .into_iter()
-        .chain(sequences)
-        .collect::<Result<Vec<_>>>()?;
+        .map(|component| {
+            component
+                .as_os_str()
+                .to_str()
+                .ok_or(Error::ArgInvalidUnicode)
+                .and_then(|s| Abbr::from_string(s.to_string()))
+        })
+        .collect::<Result<Vec<Abbr>>>()?;
 
-    let first_depth = matches
-        .value_of("first-max-depth")
-        .map(|depth| depth.parse::<usize>())
-        .transpose()
-        .map_err(|_| Error::InvalidArgValue("first-max-depth".to_string()))?;
+    if let Some(Abbr::Wildcard) = abbr.last() {
+        return Err(Error::WildcardAtLastPlace);
+    }
 
-    let next_depth = matches
-        .value_of("next-max-depth")
-        .map(|depth| depth.parse::<usize>())
-        .transpose()
-        .map_err(|_| Error::InvalidArgValue("next-max-depth".to_string()))?;
+    trace!("Abbreviation `{:?}`.", abbr);
 
-    let opts = SearchOpts {
-        first_depth,
-        next_depth,
-        start_dir,
-    };
 
-    Ok((opts, sequences))
+    Ok((start_path, abbr))
 }
 
-fn extract_start_dir<E, P>(
-    path: P,
-    engine: E,
-) -> Result<(PathBuf, Option<Sequence>)>
-where
-    P: AsRef<Path>,
-    E: SearchEngine,
-{
-    // TODO: Remove repetition.
 
-    trace!("Extracting start dir from first sequence.");
+fn extract_start_path<'p>(
+    arg: &'p Path,
+) -> (Option<PathBuf>, Vec<Component<'p>>) {
+    trace!("Extracting start path.");
 
-    use std::path::Component::*;
 
-    let mut prefix = path.as_ref().components();
-    let mut rejected = VecDeque::new();
+    let mut suffix = arg.components().peekable();
+    let mut prefix: Option<PathBuf> = None;
 
-    let generate_sequence = |rejected: VecDeque<_>| -> Result<_> {
-        let slices = rejected
-            .into_iter()
-            .map(|component| match component {
-                Normal(os_str) => {
-                    let string = os_str.to_string_lossy().into_owned();
 
-                    Slice::from_string(string)
-                }
-                _ => Err(Error::InvalidSlice(format!(
-                    "{:?}",
-                    component.as_os_str()
-                ))),
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let mb_sequence = if slices.is_empty() {
-            None
-        } else {
-            Some(Sequence {
-                slices,
-                slice_to_match: 0,
-            })
-        };
-
-        Ok(mb_sequence)
-    };
-
-    loop {
-        let subpath = prefix.as_path();
-
-        if engine.is_dir(subpath) {
-            let start_dir = subpath.into();
-            let sequence = generate_sequence(rejected)?;
-
-            return Ok((start_dir, sequence));
+    // Handle cases `kn /**/*`, `kn C:/**/*`, `kn ../../**/*` etc..
+    // Doesn't handle a literal tilde, it must be expanded by the shell.
+    while let Some(component) = suffix.next_if(|component| {
+        use std::path::Component::*;
+        match component {
+            Prefix(_) | RootDir | CurDir | ParentDir => true,
+            Normal(_) => false,
         }
-
-        match prefix.next_back() {
-            Some(component) => rejected.push_front(component),
-            None => break,
+    }) {
+        match prefix {
+            Some(ref mut prefix) => prefix.push(component),
+            None => {
+                prefix = Some(PathBuf::from(as_path(&component)));
+            }
         }
     }
 
-    let start_dir = std::env::current_dir()?;
-    let sequence = generate_sequence(rejected)?;
+    let suffix = suffix.collect();
 
-    return Ok((start_dir, sequence));
+    (prefix, suffix)
 }
+
 
 #[cfg(test)]
 mod test {
-    use super::{entry::EntryMatch, slice::Slice, *};
+    use super::*;
     use crate::utils::as_path;
-
-    use EntryMatch::*;
 
     use std::collections::HashMap;
 
+    use pretty_assertions::assert_eq;
+
+
     #[test]
-    fn test_extract_start_dir() {
-        let mut search_engine = HashMap::new();
+    fn test_extract_start_path() {
+        // No start path.
+        let (start_path, suffix) = extract_start_path(as_path("a/b/c"));
+        let first_abbr = suffix[0].as_os_str();
 
-        search_engine.insert("ax".into(), vec!["ox".into()]);
-        search_engine.insert("ax/ox".into(), vec![]);
-        let (start_dir, first) =
-            extract_start_dir("ax/ox/ex", &search_engine).unwrap();
-        let first = first.unwrap();
+        assert!(start_path.is_none());
+        assert_eq!(first_abbr, "a");
 
-        assert_eq!(start_dir, as_path("ax/ox"));
-        variant!(&first.slices()[0], Slice::Literal(literal) if literal == "ex");
 
-        search_engine.insert("/".into(), vec!["gniazdo-os".into()]);
-        search_engine.insert("/gniazdo-os".into(), vec![]);
-        let (start_dir, first) =
-            extract_start_dir("/gn", &search_engine).unwrap();
-        let first = first.unwrap();
+        // Root dir.
+        let (start_path, suffix) = extract_start_path(as_path("/gn"));
+        let first_abbr = suffix[0].as_os_str();
 
-        assert_eq!(start_dir, as_path("/"));
-        variant!(&first.slices()[0], Slice::Literal(literal) if literal == "gn");
+        assert_eq!(start_path.unwrap(), as_path("/"));
+        assert_eq!(first_abbr, "gn");
 
-        search_engine.insert("~".into(), vec!["dodo".into()]);
-        search_engine.insert("~/dodo".into(), vec![]);
-        let (start_dir, first) =
-            extract_start_dir("~/do", &search_engine).unwrap();
-        let first = first.unwrap();
 
-        assert_eq!(start_dir, as_path("~"));
-        variant!(&first.slices()[0], Slice::Literal(literal) if literal == "do");
+        // Multiple `..` and `.`.
+        let (start_path, suffix) = extract_start_path(as_path(".././../do"));
+        let first_abbr = suffix[0].as_os_str();
 
-        let (start_dir, first) =
-            extract_start_dir("~/dodo", &search_engine).unwrap();
-
-        assert_eq!(start_dir, as_path("~/dodo"));
-        assert!(first.is_none());
+        assert_eq!(start_path.unwrap(), as_path(".././.."));
+        assert_eq!(first_abbr, "do");
     }
+
 
     #[test]
     fn test_entry_walk() {
-        use MatchStrength::*;
+        use abbr::Congruence::*;
+        use entry::Flow::*;
 
-        let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
-        let opts = SearchOpts::default();
 
-        // Test path: `a/o/a/b`.
+        // Test path: `a/b`.
         let mut search_engine = HashMap::new();
-        search_engine.insert("a".into(), vec!["a/o".into()]);
-        search_engine.insert("a/o".into(), vec!["a/o/a".into()]);
-        search_engine.insert("a/o/a".into(), vec!["a/o/a/b".into()]);
+
+        search_engine.insert("a".into(), vec!["a/boo".into()]);
+        search_engine.insert("a/boo".into(), vec![]);
+
+        let abbr = Abbr::from_string("a".to_string()).unwrap();
+        let rest = vec![Abbr::from_string("b".to_string()).unwrap()];
+
 
         // The square brackets indicate which component will be matched against
-        // which slice.
+        // which abbreviation.
+
 
         // path: [a]
         // slices: [a]/b
-        let entry_a = Entry::new("a".into(), vec![sequence_ab], opts);
+        let entry_a = Entry::new("a".into(), &abbr, &rest).unwrap();
         assert_eq!(entry_a.path(), as_path("a"));
-        let result = entry_a.read_dir(&search_engine).unwrap();
+        let result = entry_a.advance(&search_engine);
 
-        // path: a/[o]
+
+        // path: a/[boo]
         // slices: a/[b]
-        let entry_ao = variant!(result, Advancement(children, Complete) => children[0].clone());
-        assert_eq!(entry_ao.path(), as_path("a/o"));
-        let result = entry_ao.read_dir(&search_engine).unwrap();
-
-        // path: a/o/[a]
-        // slices: [a]/b
-        let entry_aoa = variant!(result, Advancement(children, Naught) => children[0].clone());
-        assert_eq!(entry_aoa.path(), as_path("a/o/a"));
-        let result = entry_aoa.read_dir(&search_engine).unwrap();
-
-        // path: a/o/a/[b]
-        // slices: a/[b]
-        let entry_aoab = variant!(result, Advancement(children, Complete) => children[0].clone());
-        assert_eq!(entry_aoab.path(), as_path("a/o/a/b"));
-        let result = entry_aoab.read_dir(&search_engine).unwrap();
-
-        let path = variant!(result, FullMatch(path, Complete) => path);
-        assert_eq!(path, as_path("a/o/a/b"));
-    }
-
-    #[test]
-    fn test_first_depth_exceeded() {
-        let search_engine = HashMap::new();
-        let opts = SearchOpts {
-            first_depth: Some(0),
-            ..Default::default()
-        };
-
-        let sequence_a: Sequence = Sequence::from_str("a").unwrap();
-        let entry = Entry::new("o".into(), vec![sequence_a], opts);
-
-        // Check slice `a` against path `o` with `first_depth` set to 0.
-        let result = entry.read_dir(&search_engine).unwrap();
-        variant!(result, DeadEnd);
-    }
-
-    #[test]
-    fn test_premature_match() {
-        let sequence_abc: Sequence = Sequence::from_str("a/b/c").unwrap();
-        let opts = SearchOpts {
-            first_depth: Some(1),
-            ..Default::default()
-        };
-
-        // Test path: `a/b/o`.
-        let mut search_engine = HashMap::new();
-        search_engine.insert("a".into(), vec!["a/b".into()]);
-        search_engine.insert("a/b".into(), vec!["a/b/o".into()]);
-
-        // path: [a]
-        // slices: [a]/b/c
-        let entry_a = Entry::new("a".into(), vec![sequence_abc], opts);
-        let result = entry_a.read_dir(&search_engine).unwrap();
-
-        // path: a/[b]
-        // slices: a/[b]/c
         let entry_ab =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.read_dir(&search_engine).unwrap();
+            variant!(result, Continue(children) => children[0].clone());
+        assert_eq!(entry_ab.path(), as_path("a/boo"));
+        let result = entry_ab.advance(&search_engine);
 
-        // path: a/b/o
-        // slices: a/b/[c]
-        let entry_abo =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abo.read_dir(&search_engine).unwrap();
-        variant!(result, DeadEnd => ());
-
-        // No matter what the continuation of this path is (`a/b/o/*`), the
-        // options would be violated in the subsequent matches.
+        let entry_ab = variant!(result, FullMatch(entry_ab) => entry_ab);
+        variant!(entry_ab.congruence(), [Complete, Partial(_)]);
     }
 
-    #[test]
-    fn test_premature_match_recovery() {
-        let sequence_abc: Sequence = Sequence::from_str("a/b").unwrap();
-        let opts = SearchOpts {
-            first_depth: Some(2),
-            ..Default::default()
-        };
 
-        // Test path: `a/o/a/b`.
+    #[test]
+    fn test_dead_end() {
+        use entry::Flow::*;
+
+
+        // Test path: `a/b`.
         let mut search_engine = HashMap::new();
         search_engine.insert("a".into(), vec!["a/o".into()]);
-        search_engine.insert("a/o".into(), vec!["a/o/a".into()]);
-        search_engine.insert("a/o/a".into(), vec!["a/o/a/b".into()]);
+        search_engine.insert("a/o".into(), vec![]);
+
+        let abbr = Abbr::from_string("a".to_string()).unwrap();
+        let rest = vec![Abbr::from_string("b".to_string()).unwrap()];
+
 
         // path: [a]
         // slices: [a]/b
-        let entry_a = Entry::new("a".into(), vec![sequence_abc], opts);
-        let result = entry_a.read_dir(&search_engine).unwrap();
+        let entry_a = Entry::new("a".into(), &abbr, &rest).unwrap();
+        assert_eq!(entry_a.path(), as_path("a"));
+        let result = entry_a.advance(&search_engine);
 
-        // path: a/[o]
+
+        // path: a/[b]
         // slices: a/[b]
-        let entry_ao =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ao.read_dir(&search_engine).unwrap();
-
-        // Entry `a/o` doesn't return `DeadEnd`, because there might still be a
-        // match for slice `a` at index 2 - in the next entry `a/o/*`
-        // component * might match 'a'.
-
-        // path: a/o/[a]
-        // slices: [a]/b
-        let _entry_aoa =
-            variant!(result, Advancement(children, _) => children[0].clone());
-    }
-
-    #[test]
-    fn test_wildcard() {
-        let opts = SearchOpts {
-            first_depth: Some(0),
-            next_depth: Some(0),
-            ..Default::default()
-        };
-
-        let mut search_engine = HashMap::new();
-        search_engine.insert("a".into(), vec!["a/o".into()]);
-        search_engine.insert("a/o".into(), vec!["a/o/b".into()]);
-
-        // path: [a]
-        // slices: [a]/-/b
-        let sequence: Sequence = Sequence::from_str("a/-/b").unwrap();
-        let entry_a = Entry::new("a".into(), vec![sequence], opts);
-        let result = entry_a.read_dir(&search_engine).unwrap();
-
-        // Wildcard matches any (every?) component.
-        // path: a/o
-        // slices: a/[-]/b
-        let entry_ao =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ao.read_dir(&search_engine).unwrap();
-
-        // path: a/o/b
-        // slices: a/-/[b]
-        let entry_aob =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_aob.read_dir(&search_engine).unwrap();
-
-        variant!(result, FullMatch(_, _));
-    }
-
-    #[test]
-    fn test_multiple_sequences() {
-        let opts = SearchOpts {
-            first_depth: Some(0),
-            next_depth: Some(0),
-            ..Default::default()
-        };
-
-        // Test path: `a/b/x/y`.
-        let mut search_engine = HashMap::new();
-        search_engine.insert("a".into(), vec!["a/b".into()]);
-        search_engine.insert("a/b".into(), vec!["a/b/x".into()]);
-        search_engine.insert("a/b/x".into(), vec!["a/b/x/y".into()]);
-
-        // path: [a]
-        // slices: [a]/b ...
-        let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
-        let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
-        let entry_a =
-            Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
-        let result = entry_a.read_dir(&search_engine).unwrap();
-
-        // path: a/[b]
-        // slices: a/[b] ...
         let entry_ab =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.read_dir(&search_engine).unwrap();
-
-        // path: a/b/[x]
-        // slices: ... [x]/y
-        let entry_abx =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abx.read_dir(&search_engine).unwrap();
-
-        // path: a/b/x/y
-        // slices: ... x/[y]
-        let entry_abxy =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abxy.read_dir(&search_engine).unwrap();
-
-        variant!(result, FullMatch(_, _));
-    }
-
-    #[test]
-    fn test_next_depth_exceeded() {
-        let opts = SearchOpts {
-            first_depth: Some(0),
-            next_depth: Some(0),
-            ..Default::default()
-        };
-
-        // Test path: `a/b/o/x/y`.
-        let mut search_engine = HashMap::new();
-        search_engine.insert("a".into(), vec!["a/b".into()]);
-        search_engine.insert("a/b".into(), vec!["a/b/o".into()]);
-        search_engine.insert("a/b/o".into(), vec!["a/b/o/x".into()]);
-        search_engine.insert("a/b/o/x".into(), vec!["a/b/o/x/y".into()]);
-
-        // path: [a]
-        // slices: [a]/b ...
-        let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
-        let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
-        let entry_a =
-            Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
-        let result = entry_a.read_dir(&search_engine).unwrap();
-
-        // path: a/[b]
-        // slices: a/[b] ...
-        let entry_ab =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.read_dir(&search_engine).unwrap();
-
-        // path: a/b/[o]
-        // slices: ... [x]/y
-        let entry_abx =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abx.read_dir(&search_engine).unwrap();
-
-        variant!(result, DeadEnd);
-    }
-
-    #[test]
-    fn test_next_depth() {
-        use MatchStrength::*;
-
-        let opts = SearchOpts {
-            first_depth: Some(0),
-            next_depth: Some(1),
-            ..Default::default()
-        };
-
-        // Test path: `a/b/o/x/y`.
-        let mut search_engine = HashMap::new();
-        search_engine.insert("a".into(), vec!["a/b".into()]);
-        search_engine.insert("a/b".into(), vec!["a/b/o".into()]);
-        search_engine.insert("a/b/o".into(), vec!["a/b/o/x".into()]);
-        search_engine.insert("a/b/o/x".into(), vec!["a/b/o/x/y".into()]);
-
-        // path: [a]
-        // slices: [a]/b ...
-        let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
-        let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
-        let entry_a =
-            Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
-        let result = entry_a.read_dir(&search_engine).unwrap();
-
-        // path: a/[b]
-        // slices: a/[b] ...
-        let entry_ab =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.read_dir(&search_engine).unwrap();
-
-        // path: a/b/[o]
-        // slices: ... [x]/y
-        let entry_abo =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abo.read_dir(&search_engine).unwrap();
-
-        // path: a/b/o/[x]
-        // slices: ... [x]/y
-        let entry_abox = variant!(result, Advancement(children, Naught) => children[0].clone());
-        let result = entry_abox.read_dir(&search_engine).unwrap();
-
-        // path: a/b/o/x/[y]
-        // slices: ... x/[y]
-        let entry_aboxy =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_aboxy.read_dir(&search_engine).unwrap();
-
-        variant!(result, FullMatch(_, _));
-    }
-
-    #[test]
-    fn test_next_depth_premature_match() {
-        use MatchStrength::*;
-
-        let opts = SearchOpts {
-            first_depth: Some(0),
-            next_depth: Some(1),
-            ..Default::default()
-        };
-
-        // Test path: `a/b/o/x/o`.
-        let mut search_engine = HashMap::new();
-        search_engine.insert("a".into(), vec!["a/b".into()]);
-        search_engine.insert("a/b".into(), vec!["a/b/o".into()]);
-        search_engine.insert("a/b/o".into(), vec!["a/b/o/x".into()]);
-        search_engine.insert("a/b/o/x".into(), vec!["a/b/o/x/o".into()]);
-
-        // path: [a]
-        // slices: [a]/b ...
-        let sequence_ab: Sequence = Sequence::from_str("a/b").unwrap();
-        let sequence_xy: Sequence = Sequence::from_str("x/y").unwrap();
-        let entry_a =
-            Entry::new("a".into(), vec![sequence_ab, sequence_xy], opts);
-        let result = entry_a.read_dir(&search_engine).unwrap();
-
-        // path: a/[b]
-        // slices: a/[b] ...
-        let entry_ab =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_ab.read_dir(&search_engine).unwrap();
-
-        // path: a/b/[o]
-        // slices: ... [x]/y
-        let entry_abo =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_abo.read_dir(&search_engine).unwrap();
-
-        // path: a/b/o/[x]
-        // slices: ... [x]/y
-        let entry_abox = variant!(result, Advancement(children, Naught) => children[0].clone());
-        let result = entry_abox.read_dir(&search_engine).unwrap();
-
-        // path: a/b/o/x/[o]
-        // slices: ... x/[y]
-        let entry_aboxy =
-            variant!(result, Advancement(children, _) => children[0].clone());
-        let result = entry_aboxy.read_dir(&search_engine).unwrap();
+            variant!(result, Continue(children) => children[0].clone());
+        assert_eq!(entry_ab.path(), as_path("a/o"));
+        let result = entry_ab.advance(&search_engine);
 
         variant!(result, DeadEnd);
     }

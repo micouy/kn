@@ -1,5 +1,6 @@
 # Code repurposed from `zoxide/templates/fish.txt`.
 
+
 function kn
     set argc (count $argv)
 
@@ -19,9 +20,9 @@ function kn
         set -l __kn_result (
             begin;
                 set -x RUST_LOG 0;
-                command _kn query {% if first_max_depth %}--first-max-depth {{ first_max_depth }} {% endif %}{% if next_max_depth %}--next-max-depth {{ next_max_depth }} {% endif %}$argv;
+                command _kn query -- $argv;
         end)
-
+ 
         and if test -d "$__kn_result"
             cd $__kn_result
         end

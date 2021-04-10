@@ -1,5 +1,6 @@
 # Code repurposed from `zoxide/templates/bash.txt`.
 
+
 function kn() {
     if [[ $# -eq 0 ]]; then
         # no args provided, go to home dir
@@ -16,6 +17,6 @@ function kn() {
 
         export RUST_LOG=0
         \builtin local __kn_result
-        __kn_result="$(_kn query {% if first_max_depth %}--first-max-depth {{ first_max_depth }} {% endif %}{% if next_max_depth %}--next-max-depth {{ next_max_depth }} {% endif %}"$@")" && \builtin cd "${__kn_result}"
+        __kn_result="$(_kn query -- "$@")" && \builtin cd "${__kn_result}"
     fi
 }
