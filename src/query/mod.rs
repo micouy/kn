@@ -63,12 +63,12 @@ where
         .collect::<Result<VecDeque<_>>>()?;
 
 
-    let mut found: Option<(usize, Vec<PathBuf>)> = None;
+    let mut found: Option<(usize, Vec<Entry>)> = None;
 
     while let Some(entry) = queue.pop_front() {
         // Reject entries that are deeper than the ones in `found`.
         if let Some((depth, _)) = found {
-            if entry.attempt() > depth {
+            if entry.n_attempts() > depth {
                 continue;
             }
         }
@@ -80,17 +80,17 @@ where
                     Red.paint(entry.path().to_string_lossy())
                 );
             }
-            Continue(children, _congruence) => {
+            Continue(children) => {
                 info!("Continue down `{}`.", entry.path().display());
                 queue.extend(children.into_iter());
             }
-            FullMatch(path, _congruence) => {
+            FullMatch(entry) => {
                 info!("Full match `{}`.", entry.path().display());
 
                 // Update `found`.
                 match found {
-                    Some((_, ref mut paths)) => paths.push(path),
-                    None => found = Some((entry.attempt(), vec![path])),
+                    Some((_, ref mut entries)) => entries.push(entry),
+                    None => found = Some((entry.n_attempts(), vec![entry])),
                 }
             }
         }
@@ -98,9 +98,31 @@ where
 
 
     match found {
-        Some((_, paths)) => Ok(paths),
+        Some((_, entries)) => {
+            // TODO: Return an object containing details about matches?
+            trace!("Found entries:");
+
+            for entry in &entries {
+                trace!("Path: `{}`.", entry.path().display());
+                trace!("Congruence: `{:?}`.", entry.congruence());
+            }
+
+
+            let paths = get_ordered_paths(entries);
+
+            Ok(paths)
+        }
         None => Err(Error::NoPathFound),
     }
+}
+
+
+fn get_ordered_paths(mut entries: Vec<Entry<'_>>) -> Vec<PathBuf> {
+    entries.sort_by(|a, b| a.congruence().cmp(b.congruence()));
+
+    let paths = entries.into_iter().map(|entry| entry.path).collect();
+
+    paths
 }
 
 
@@ -197,6 +219,9 @@ mod test {
     use pretty_assertions::assert_eq;
 
 
+    // TODO: Test `get_ordered_paths`.
+
+
     #[test]
     fn test_extract_start_path() {
         // No start path.
@@ -233,8 +258,8 @@ mod test {
         // Test path: `a/b`.
         let mut search_engine = HashMap::new();
 
-        search_engine.insert("a".into(), vec!["a/b".into()]);
-        search_engine.insert("a/b".into(), vec![]);
+        search_engine.insert("a".into(), vec!["a/boo".into()]);
+        search_engine.insert("a/boo".into(), vec![]);
 
         let abbr = Abbr::from_string("a".to_string()).unwrap();
         let rest = vec![Abbr::from_string("b".to_string()).unwrap()];
@@ -251,20 +276,20 @@ mod test {
         let result = entry_a.advance(&search_engine);
 
 
-        // path: a/[b]
+        // path: a/[boo]
         // slices: a/[b]
-        let entry_ab = variant!(result, Continue(children, Complete) => children[0].clone());
-        assert_eq!(entry_ab.path(), as_path("a/b"));
+        let entry_ab =
+            variant!(result, Continue(children) => children[0].clone());
+        assert_eq!(entry_ab.path(), as_path("a/boo"));
         let result = entry_ab.advance(&search_engine);
 
-        let path = variant!(result, FullMatch(path, Complete) => path);
-        assert_eq!(path, as_path("a/b"));
+        let entry_ab = variant!(result, FullMatch(entry_ab) => entry_ab);
+        variant!(entry_ab.congruence(), [Complete, Partial(_)]);
     }
 
 
     #[test]
     fn test_dead_end() {
-        use abbr::Congruence::*;
         use entry::Flow::*;
 
 
@@ -286,7 +311,8 @@ mod test {
 
         // path: a/[b]
         // slices: a/[b]
-        let entry_ab = variant!(result, Continue(children, Complete) => children[0].clone());
+        let entry_ab =
+            variant!(result, Continue(children) => children[0].clone());
         assert_eq!(entry_ab.path(), as_path("a/o"));
         let result = entry_ab.advance(&search_engine);
 

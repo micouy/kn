@@ -1,5 +1,9 @@
 use crate::{Error, Result};
 
+
+use std::cmp::Ordering;
+
+
 use regex::Regex;
 use strsim::levenshtein as str_distance;
 
@@ -50,9 +54,10 @@ impl Abbr {
 
                     for component_c in component.chars() {
                         match abbr_chars.peek() {
-                            Some(abbr_c) => if *abbr_c == component_c.to_ascii_lowercase() {
-                                abbr_chars.next(); // Consume char.
-                            },
+                            Some(abbr_c) =>
+                                if *abbr_c == component_c.to_ascii_lowercase() {
+                                    abbr_chars.next(); // Consume char.
+                                },
                             None => break,
                         }
                     }
@@ -66,14 +71,14 @@ impl Abbr {
                     } else {
                         None
                     }
-                }
+                },
             Self::Wildcard => Some(Wildcard),
         }
     }
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Congruence {
     Partial(usize),
     Wildcard,
@@ -81,10 +86,48 @@ pub enum Congruence {
 }
 
 
+impl PartialOrd for Congruence {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+
+impl Ord for Congruence {
+    fn cmp(&self, other: &Self) -> Ordering {
+        use Congruence::*;
+        use Ordering::*;
+
+
+        match (self, other) {
+            (Complete, Complete) => Equal,
+            (Complete, _) => Less,
+
+            (Wildcard, Wildcard) => Equal,
+            (Wildcard, _) => Greater,
+
+            (Partial(_), Wildcard) => Less,
+            (Partial(a), Partial(b)) => a.cmp(&b),
+            (Partial(_), Complete) => Greater,
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
     use Congruence::*;
+
+
+    #[test]
+    fn test_congruence_ordering() {
+        assert!(Partial(1) < Partial(2));
+        assert!(Complete < Partial(1));
+        assert!(Complete < Wildcard);
+        assert!(Partial(1000) < Wildcard);
+    }
+
 
     #[test]
     fn test_from_string() {
@@ -136,9 +179,12 @@ mod test {
         let abbr = Abbr::Literal("mi".to_string());
 
 
-        let dist_a = variant!(abbr.compare("m-----i"), Some(Partial(dist_a)) => dist_a);
-        let dist_b = variant!(abbr.compare("M--i"), Some(Partial(dist_b)) => dist_b);
+        let dist_a =
+            variant!(abbr.compare("m-----i"), Some(Partial(dist_a)) => dist_a);
+        let dist_b =
+            variant!(abbr.compare("M--i"), Some(Partial(dist_b)) => dist_b);
         assert!(dist_a > dist_b);
+
         variant!(abbr.compare("im"), None);
     }
 }

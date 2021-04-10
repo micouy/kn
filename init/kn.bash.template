@@ -17,6 +17,6 @@ function kn() {
 
         export RUST_LOG=0
         \builtin local __kn_result
-        __kn_result="$(_kn query "$@")" && \builtin cd "${__kn_result}"
+        __kn_result="$(_kn query -- "$@")" && \builtin cd "${__kn_result}"
     fi
 }

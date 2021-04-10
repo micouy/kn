@@ -1,4 +1,4 @@
-use crate::{Result, Error};
+use crate::{Error, Result};
 
 
 use super::{
@@ -17,13 +17,17 @@ use std::{
 pub struct Entry<'a> {
     abbr: &'a Abbr,
     rest: &'a [Abbr],
-    path: PathBuf,
-    n_attempts: usize,
+    pub(super) path: PathBuf,
+    congruence: Vec<Congruence>,
 }
 
 
 impl<'a> Entry<'a> {
-    pub fn new(path: PathBuf, abbr: &'a Abbr, rest: &'a [Abbr]) -> Result<Self> {
+    pub fn new(
+        path: PathBuf,
+        abbr: &'a Abbr,
+        rest: &'a [Abbr],
+    ) -> Result<Self> {
         // Safety check. Return error on wildcard at last place.
         if let (Abbr::Wildcard, []) = (abbr, rest) {
             return Err(Error::WildcardAtLastPlace);
@@ -33,7 +37,7 @@ impl<'a> Entry<'a> {
             path,
             abbr,
             rest,
-            n_attempts: 0,
+            congruence: vec![],
         })
     }
 
@@ -41,8 +45,12 @@ impl<'a> Entry<'a> {
         self.path.as_path()
     }
 
-    pub fn attempt(&self) -> usize {
-        self.n_attempts
+    pub fn n_attempts(&self) -> usize {
+        self.congruence.len()
+    }
+
+    pub fn congruence(&self) -> &[Congruence] {
+        self.congruence.as_slice()
     }
 
     pub fn advance<E>(&self, engine: E) -> Flow<'a>
@@ -62,19 +70,29 @@ impl<'a> Entry<'a> {
         let congruence = self.abbr.compare(&component);
 
         match congruence {
-            Some(congruence) => match self.rest {
+            Some(next_congruence) => match self.rest {
                 [abbr, rest @ ..] => {
+                    let mut congruence = self.congruence.clone();
+                    congruence.push(next_congruence);
+
                     let children = Self::construct_children(
-                        &self.path,
-                        abbr,
-                        rest,
-                        self.n_attempts + 1,
-                        engine,
+                        &self.path, abbr, rest, congruence, engine,
                     );
 
-                    Flow::Continue(children, congruence)
+                    Flow::Continue(children)
                 }
-                [] => Flow::FullMatch(self.path.clone(), congruence),
+                [] => {
+                    let mut congruence = self.congruence.clone();
+                    congruence.push(next_congruence);
+
+                    let entry = Entry {
+                        congruence,
+                        path: self.path.clone(),
+                        ..*self
+                    };
+
+                    Flow::FullMatch(entry)
+                }
             },
             None => Flow::DeadEnd,
         }
@@ -84,7 +102,7 @@ impl<'a> Entry<'a> {
         path: &Path,
         abbr: &'a Abbr,
         rest: &'a [Abbr],
-        n_attempts: usize,
+        congruence: Vec<Congruence>,
         engine: E,
     ) -> Vec<Entry<'a>>
     where
@@ -95,9 +113,9 @@ impl<'a> Entry<'a> {
             .iter()
             .map(|child_path| Entry {
                 path: child_path.into(),
+                congruence: congruence.clone(),
                 abbr,
                 rest,
-                n_attempts,
             })
             .collect()
     }
@@ -106,7 +124,7 @@ impl<'a> Entry<'a> {
 
 #[derive(Debug)]
 pub enum Flow<'a> {
-    Continue(Vec<Entry<'a>>, Congruence),
-    FullMatch(PathBuf, Congruence),
+    Continue(Vec<Entry<'a>>),
+    FullMatch(Entry<'a>),
     DeadEnd,
 }

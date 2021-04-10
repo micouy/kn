@@ -33,7 +33,8 @@ pub fn app() -> App<'static, 'static> {
                 .help("Query for path matching the abbreviation.")
                 .arg(
                     Arg::with_name("ABBR")
-                        .help("\"ABBR\" itself is an abbreviation."),
+                        .help("\"ABBR\" itself is an abbreviation.")
+                        .raw(true),
                 ),
         )
 }
