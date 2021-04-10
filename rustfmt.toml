@@ -1,7 +1,7 @@
 imports_layout = "HorizontalVertical"
 max_width = 80
 # comment_width = 60
-normalize_comments = true
+normalize_comments = false
 match_arm_blocks = false
 wrap_comments = true
 blank_lines_upper_bound = 2

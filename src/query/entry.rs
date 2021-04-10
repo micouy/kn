@@ -1,148 +1,104 @@
 use super::{
+    abbr::{Abbr, Congruence},
     search_engine::SearchEngine,
-    sequence::{Sequence, SequenceFlow},
-    MatchStrength,
-    SearchOpts,
 };
-use crate::{Error, Result};
 
-use std::path::{Path, PathBuf};
+
+use std::{
+    borrow::Cow,
+    path::{Path, PathBuf},
+};
+
 
 #[derive(Debug, Clone)]
-pub struct Entry {
-    sequences: Vec<Sequence>,
+pub struct Entry<'a> {
+    abbr: &'a Abbr,
+    rest: &'a [Abbr],
     path: PathBuf,
-    opts: SearchOpts,
-    attempt_count: usize,
-    last_match: Option<usize>,
+    n_attempts: usize,
 }
 
-impl Entry {
-    pub fn new(
-        path: PathBuf,
-        sequences: Vec<Sequence>,
-        opts: SearchOpts,
-    ) -> Self {
+
+impl<'a> Entry<'a> {
+    pub fn new(path: PathBuf, abbr: &'a Abbr, rest: &'a [Abbr]) -> Self {
         Self {
             path,
-            sequences,
-            opts,
-            attempt_count: 0,
-            last_match: None,
+            abbr,
+            rest,
+            n_attempts: 0,
         }
-    }
-
-    pub fn attempt(&self) -> usize {
-        self.attempt_count
     }
 
     pub fn path(&self) -> &Path {
         self.path.as_path()
     }
 
-    pub fn read_dir<E>(&self, engine: E) -> Result<EntryMatch>
+    pub fn attempt(&self) -> usize {
+        self.n_attempts
+    }
+
+    pub fn advance<E>(&self, engine: E) -> Flow<'a>
     where
         E: SearchEngine,
     {
-        use EntryMatch::*;
-
         let component = self
             .path
             .file_name()
-            .ok_or(dev_err!("no filename in entry path"))?
-            .to_string_lossy();
+            .map(|file_name| file_name.to_string_lossy());
+        let component: Cow<_> = match component {
+            None => return Flow::DeadEnd,
+            Some(component) => component,
+        };
 
-        let sequence = self
-            .sequences
-            .get(0)
-            .ok_or(dev_err!("invalid current sequence index"))?;
 
-        let sequence_match = sequence.match_component(
-            &component,
-            self.attempt_count,
-            self.last_match,
-            &self.opts,
-        )?;
+        let congruence = self.abbr.compare(&component);
 
-        let result = match sequence_match {
-            SequenceFlow::Next(strength) => {
-                let is_last = (self.sequences.len() <= 1);
-
-                if is_last {
-                    FullMatch(self.path.clone(), strength)
-                } else {
-                    let sequences = self
-                        .sequences
-                        .get(1..)
-                        .ok_or(dev_err!("entry with no sequences"))?;
-
-                    // Update last match.
-                    let last_match = Some(self.attempt_count);
-                    let children = Self::get_children(
+        match congruence {
+            Some(congruence) => match self.rest {
+                [abbr, rest @ ..] => {
+                    let children = Self::construct_children(
                         &self.path,
-                        self.attempt_count + 1,
-                        &self.opts,
-                        last_match,
-                        &sequences,
+                        abbr,
+                        rest,
+                        self.n_attempts + 1,
                         engine,
                     );
 
-                    Advancement(children, strength)
+                    Flow::Continue(children, congruence)
                 }
-            }
-            SequenceFlow::Continue(sequence, strength) => {
-                let mut sequences = self.sequences.clone();
-                let first_sequence = sequences
-                    .get_mut(0)
-                    .ok_or(dev_err!("entry with no sequences"))?;
-                *first_sequence = sequence;
-
-                let children = Self::get_children(
-                    &self.path,
-                    self.attempt_count + 1,
-                    &self.opts,
-                    self.last_match,
-                    &sequences,
-                    engine,
-                );
-
-                Advancement(children, strength)
-            }
-            SequenceFlow::DeadEnd => DeadEnd,
-        };
-
-        Ok(result)
+                [] => Flow::FullMatch(self.path.clone(), congruence),
+            },
+            None => Flow::DeadEnd,
+        }
     }
 
-    fn get_children<P, E>(
-        path: P,
-        attempt_count: usize,
-        opts: &SearchOpts,
-        last_match: Option<usize>,
-        sequences: &[Sequence],
+    fn construct_children<E>(
+        path: &Path,
+        abbr: &'a Abbr,
+        rest: &'a [Abbr],
+        n_attempts: usize,
         engine: E,
-    ) -> Vec<Entry>
+    ) -> Vec<Entry<'a>>
     where
-        P: AsRef<Path>,
         E: SearchEngine,
     {
         engine
             .read_dir(path)
-            .into_iter()
+            .iter()
             .map(|child_path| Entry {
-                attempt_count,
-                sequences: sequences.to_vec(),
-                path: child_path,
-                opts: opts.clone(),
-                last_match,
+                path: child_path.into(),
+                abbr,
+                rest,
+                n_attempts,
             })
             .collect()
     }
 }
 
+
 #[derive(Debug)]
-pub enum EntryMatch {
-    Advancement(Vec<Entry>, MatchStrength),
-    FullMatch(PathBuf, MatchStrength),
+pub enum Flow<'a> {
+    Continue(Vec<Entry<'a>>, Congruence),
+    FullMatch(PathBuf, Congruence),
     DeadEnd,
 }
