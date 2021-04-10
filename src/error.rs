@@ -13,10 +13,10 @@ pub enum Error {
         cause: String,
     },
 
-    #[error("Invalid slice: `{0}`.")]
-    InvalidSlice(String),
+    #[error("Abbreviation `{0}` is invalid.")]
+    InvalidAbbr(String),
 
-    #[error("Invalid value for arg `{0}`.")]
+    #[error("Value of arg `{0}` is invalid.")]
     InvalidArgValue(String),
 
     #[error(transparent)]
@@ -25,9 +25,12 @@ pub enum Error {
     #[error("No path found.")]
     NoPathFound,
 
-    #[error("Provided abbreviation was empty.")]
+    #[error("Abbreviation is empty.")]
     EmptyAbbr,
 
-    #[error("Argument contains invalid UTF-8.")]
+    #[error("Arg contains invalid UTF-8.")]
     ArgInvalidUnicode,
+
+    #[error("Abbreviation contains wildcard at the last place.")]
+    WildcardAtLastPlace,
 }

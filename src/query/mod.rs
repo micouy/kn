@@ -60,7 +60,7 @@ where
         .read_dir(start_path)
         .into_iter()
         .map(|subdir| Entry::new(subdir, abbr, rest))
-        .collect::<VecDeque<_>>();
+        .collect::<Result<VecDeque<_>>>()?;
 
 
     let mut found: Option<(usize, Vec<PathBuf>)> = None;
@@ -132,6 +132,10 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<(PathBuf, Vec<Abbr>)> {
                 .and_then(|s| Abbr::from_string(s.to_string()))
         })
         .collect::<Result<Vec<Abbr>>>()?;
+
+    if let Some(Abbr::Wildcard) = abbr.last() {
+        return Err(Error::WildcardAtLastPlace);
+    }
 
     trace!("Abbreviation `{:?}`.", abbr);
 
@@ -242,7 +246,7 @@ mod test {
 
         // path: [a]
         // slices: [a]/b
-        let entry_a = Entry::new("a".into(), &abbr, &rest);
+        let entry_a = Entry::new("a".into(), &abbr, &rest).unwrap();
         assert_eq!(entry_a.path(), as_path("a"));
         let result = entry_a.advance(&search_engine);
 
@@ -275,7 +279,7 @@ mod test {
 
         // path: [a]
         // slices: [a]/b
-        let entry_a = Entry::new("a".into(), &abbr, &rest);
+        let entry_a = Entry::new("a".into(), &abbr, &rest).unwrap();
         assert_eq!(entry_a.path(), as_path("a"));
         let result = entry_a.advance(&search_engine);
 

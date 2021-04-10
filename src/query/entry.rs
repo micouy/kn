@@ -1,3 +1,6 @@
+use crate::{Result, Error};
+
+
 use super::{
     abbr::{Abbr, Congruence},
     search_engine::SearchEngine,
@@ -20,13 +23,18 @@ pub struct Entry<'a> {
 
 
 impl<'a> Entry<'a> {
-    pub fn new(path: PathBuf, abbr: &'a Abbr, rest: &'a [Abbr]) -> Self {
-        Self {
+    pub fn new(path: PathBuf, abbr: &'a Abbr, rest: &'a [Abbr]) -> Result<Self> {
+        // Safety check. Return error on wildcard at last place.
+        if let (Abbr::Wildcard, []) = (abbr, rest) {
+            return Err(Error::WildcardAtLastPlace);
+        }
+
+        Ok(Self {
             path,
             abbr,
             rest,
             n_attempts: 0,
-        }
+        })
     }
 
     pub fn path(&self) -> &Path {

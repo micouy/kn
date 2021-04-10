@@ -21,13 +21,13 @@ impl Abbr {
             Ok(Self::Wildcard)
         } else {
             if pattern.is_empty() {
-                return Err(Error::InvalidSlice(pattern));
+                return Err(Error::InvalidAbbr(pattern));
             }
             if !only_valid_re.is_match(&pattern) {
-                return Err(Error::InvalidSlice(pattern));
+                return Err(Error::InvalidAbbr(pattern));
             }
             if only_dots_re.is_match(&pattern) {
-                return Err(Error::InvalidSlice(pattern));
+                return Err(Error::InvalidAbbr(pattern));
             }
 
 
