@@ -96,13 +96,13 @@ apple/y/b      Partial(4) / Wildcard / Complete      2.
 
 # Help wanted
 
-In this project I have entered a lot of areas I have little knowledge about. Contributions and criticism are very welcome. Here are some small things you can do:
+In this project I have entered a lot of areas I have little knowledge about. Contributions and criticism are very welcome. Here are some things you can do:
 
 - Check the correctness of scripts in [init/](init/).
 - Add scripts and installation instructions for shells other than `fish`, `bash` and `zsh`.
+- Check regular expressions used in `Abbr::from_string` in `src/query/abbr.rs` to validate abbreviation's components. Are there other characters or sequences which should be prohibited?
 - Help me decide which option to choose:
   - Use `-` as a wildcard. Simple but ugly. No one uses `-` as a wildcard.
-  - Use `.` as a wildcard. Could cause all sorts of unexpected behavior, especially when used at the beginning of the abbreviation.
   - Use `//` as a wildcard (i.e. `kn a//b`). Quite intuitive. The downside is that I would have to implement my own algorithm to split the path correctly.
   - Remove wildcards.
   - Something else?
@@ -113,6 +113,7 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 ## Search engine
 
 - [ ] What to do about `.` and `..` in the middle of path abbreviation? With `..` in paths the results would be too unpredictable. Are there any situations when `..` show up in path? The user probably wouldn't type it but a command line tool could return such path.
+- [ ] Return objects containing details about the matches (the sequence of `Congruence`s with details about which chars have been matched). This will be useful in interactive mode.
 - [ ] Use inodes instead of traversing the directory structure using `read_dir()`. [Guide.](https://fasterthanli.me/series/reading-files-the-hard-way) Are there inodes on other OSes?
 - [ ] Read [Falsehoods programmers believe about paths](https://yakking.branchable.com/posts/falsehoods-programmers-believe-about-file-paths/).
 

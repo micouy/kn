@@ -17,17 +17,19 @@ pub enum Abbr {
 
 impl Abbr {
     pub fn from_string(pattern: String) -> Result<Self> {
-        let only_valid_re = Regex::new(r"^[\-_.a-zA-Z0-9]+$").unwrap();
+        // Invalid characters: /, \, any whitespace.
+        let invalid_re = Regex::new(r"[/\\\s]").unwrap();
+
         let only_dots_re = Regex::new(r"^\.+$").unwrap();
 
-        // TODO: Forbid wildcards at last place?
+
         if pattern == "-" {
             Ok(Self::Wildcard)
         } else {
             if pattern.is_empty() {
                 return Err(Error::InvalidAbbr(pattern));
             }
-            if !only_valid_re.is_match(&pattern) {
+            if invalid_re.is_match(&pattern) {
                 return Err(Error::InvalidAbbr(pattern));
             }
             if only_dots_re.is_match(&pattern) {
@@ -131,12 +133,25 @@ mod test {
 
     #[test]
     fn test_from_string() {
+        // TODO: Check if `..` is needed as a path component in some
+        // important case. One such case might be the user wants
+        // to follow a link and then enter the parent directory:
+        //
+        // a/b -> x/y/b
+        // `cd a/b/..` changes directory to `x/y/` (?).
+        //
+        // Ultimately `kn` should be at least as good as `cd`.
+
+
         let abbr = |s: &str| Abbr::from_string(s.to_string());
 
         assert!(abbr(".").is_err());
         assert!(abbr("..").is_err());
         assert!(abbr("...").is_err());
         assert!(abbr("one two three").is_err());
+        assert!(abbr("du\tpa").is_err());
+        assert!(abbr("\n").is_err());
+        assert!(abbr(r"a\b").is_err());
 
 
         let abbr = |s: &str| Abbr::from_string(s.to_string()).unwrap();
@@ -145,9 +160,9 @@ mod test {
         variant!(abbr("mOcKiNgBiRd"), Abbr::Literal(literal) if literal == "mockingbird");
         variant!(abbr("X.ae.A-12"), Abbr::Literal(literal) if literal == "x.ae.a-12");
 
-        // TODO
-        // assert!(variant!(abbr("zażółć"), Abbr::Literal(literal) => literal
-        // == "zażółć"));
+        assert!(
+            variant!(abbr("zażółć"), Abbr::Literal(literal) => literal == "zażółć")
+        );
     }
 
 

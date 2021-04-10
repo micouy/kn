@@ -48,7 +48,6 @@ fn main() {
                 exit(1);
             }
             Ok(found) =>
-            // TODO: Order the findings?
                 if let Some(first) = found.get(0) {
                     print!("{}", first.display());
 
@@ -61,7 +60,9 @@ fn main() {
                     exit(1);
                 },
         }
-    }
+    } else {
+        eprintln!("{}", dev_err!("no subcommand invoked"));
 
-    // TODO: Display error if no subcommand was invoked?
+        exit(1);
+    }
 }

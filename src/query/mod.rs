@@ -176,16 +176,6 @@ fn extract_start_path<'p>(
     let mut prefix: Option<PathBuf> = None;
 
 
-    // TODO: Check if `..` is needed as a path component in some
-    // important case. One such case might be the user wants
-    // to follow a link and then enter the parent directory:
-    //
-    // a/b -> x/y/b
-    // `cd a/b/..` changes directory to `x/y/` (?).
-    //
-    // Ultimately `kn` should be at least as good as `cd`.
-
-
     // Handle cases `kn /**/*`, `kn C:/**/*`, `kn ../../**/*` etc..
     // Doesn't handle a literal tilde, it must be expanded by the shell.
     while let Some(component) = suffix.next_if(|component| {
@@ -217,9 +207,6 @@ mod test {
     use std::collections::HashMap;
 
     use pretty_assertions::assert_eq;
-
-
-    // TODO: Test `get_ordered_paths`.
 
 
     #[test]
