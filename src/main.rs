@@ -1,4 +1,3 @@
-#![feature(exact_size_is_empty, box_syntax)]
 #![allow(unused_parens)]
 
 use std::process::exit;
