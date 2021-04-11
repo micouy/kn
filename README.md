@@ -7,7 +7,7 @@
 
 # Demo
 
-[![asciicast](https://asciinema.org/a/8Wpf3FHsDIX8nU41YpnvqdSLF.svg)](https://asciinema.org/a/8Wpf3FHsDIX8nU41YpnvqdSLF)
+[![asciicast](https://asciinema.org/a/406626.svg)](https://asciinema.org/a/406626?speed=2)
 
 
 # Installation
