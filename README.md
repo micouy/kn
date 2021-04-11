@@ -5,6 +5,11 @@
 **WARNING**: This project is in its alpha stage.
 
 
+# Demo
+
+[![asciicast](https://asciinema.org/a/8Wpf3FHsDIX8nU41YpnvqdSLF.svg)](https://asciinema.org/a/8Wpf3FHsDIX8nU41YpnvqdSLF)
+
+
 # Installation
 
 1. `git clone https://github.com/micouy/kn.git`
