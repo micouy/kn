@@ -2,7 +2,7 @@
 
 `kn` is an alternative to `cd`. It lets you navigate quickly by typing abbreviations. It doesn't track frecency or any other statistics - it's **dumb, predictable and good at one thing**.
 
-**WARNING**: This project is in it's alpha stage.
+**WARNING**: This project is in its alpha stage.
 
 
 # Installation
@@ -26,7 +26,7 @@
 
      `eval "$(_kn init bash)"`
 
-   * `zsh` (usually `~/.zsh`):
+   * `zsh` (usually `~/.zshrc`):
 
      `eval "$(_kn init zsh)"`
 5. Reload your config or launch a new shell instance to use `kn`.
