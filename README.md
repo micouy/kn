@@ -3,13 +3,13 @@
 ![Github Actions badge](https://github.com/micouy/kn/actions/workflows/build-and-tests.yml/badge.svg)
 ![crates.io badge](https://img.shields.io/crates/v/kn.svg)
 
+<p align="center">
+<img src="assets/demo.svg" width="70%" />
+</p>
+
 `kn` is an alternative to `cd`. It lets you navigate quickly by typing abbreviations. It doesn't track frecency or any other statistics - it's **dumb, predictable and good at one thing**.
 
 **WARNING**: This project is in its alpha stage.
-
-![demo](assets/demo.svg)
-
-[Watch demo.](https://asciinema.org/a/406626?speed=2)
 
 
 # Installation
@@ -39,7 +39,9 @@
 5. Reload your config or launch a new shell instance to use `kn`.
 
 
-# Usage
+# Features
+
+[Demo](https://asciinema.org/a/406626?speed=2)
 
 ```
 test-dir
@@ -65,7 +67,6 @@ $ kn tes/baz      # enter test-dir/bazz
 $ kn tes/-/baz    # enter test-dir/foo/bazz
 
 $ kn -/bo/uzz     # enter test-dir/boo/buzz
-
 ```
 
 `kn ~`, `kn ..`, `kn .`, `kn /` work just like with cd.
