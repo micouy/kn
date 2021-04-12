@@ -14,6 +14,16 @@
 
 # Installation
 
+## Building the binary
+
+Install `kn` from `crates.io`:
+
+1. `cargo install kn`
+
+**OR**
+
+Build binary from source:
+
 1. `git clone https://github.com/micouy/kn.git`
 2. `cd kn`
 3. Put the binary in a folder that is in `PATH`:
@@ -24,19 +34,23 @@
 
    `cargo build --release`
    `cp target/release/_kn DIR_IN_PATH`
-4. Add this line to the config of your shell (notice the underscore in `_kn`):
 
-   * `fish` (usually `~/.config/fish/config.fish`):
+
+## Configuring your shell
+
+1. Add this line to the config of your shell (notice the underscore in `_kn`):
+
+   * **fish** (usually `~/.config/fish/config.fish`):
 
      `_kn init fish | source`
-   * `bash` (usually `~/.bashrc`):
+   * **bash** (usually `~/.bashrc`):
 
      `eval "$(_kn init bash)"`
 
-   * `zsh` (usually `~/.zshrc`):
+   * **zsh** (usually `~/.zshrc`):
 
      `eval "$(_kn init zsh)"`
-5. Reload your config or launch a new shell instance to use `kn`.
+2. To be able to use `kn`, reload your config or launch a new shell instance.
 
 
 # Features
