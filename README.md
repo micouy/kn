@@ -6,10 +6,9 @@
 
 **WARNING**: This project is in its alpha stage.
 
+![demo](demo.svg)
 
-# Demo
-
-[![asciicast](https://asciinema.org/a/406626.svg)](https://asciinema.org/a/406626?speed=2)
+[Watch demo.](https://asciinema.org/a/406626?speed=2)
 
 
 # Installation
@@ -74,6 +73,8 @@ $ kn -/bo/uzz     # enter test-dir/boo/buzz
 `kn -/a` means "Go to `a` in any dir which is in current dir.".
 `kn /-/a` means "Go to `a` in any dir which is in root.".
 
+<details>
+<summary>Details about the ordering of found paths</summary>
 If `kn` finds many matching paths with the same number of components it orders them in such a way:
 
 1. Complete matches before partial matches. All matches by wildcards are equal. There can't be a wildcard and a complete/partial match at the same depth.
@@ -99,6 +100,7 @@ a/x/bo         Complete   / Wildcard / Partial(1)    1.
                !=           -          -
 apple/y/b      Partial(4) / Wildcard / Complete      2.
 ```
+</details>
 
 
 # Help wanted
@@ -108,11 +110,6 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 - Check the correctness of scripts in [init/](init/).
 - Add scripts and installation instructions for shells other than `fish`, `bash` and `zsh`.
 - Check regular expressions used in `Abbr::from_string` in `src/query/abbr.rs` to validate abbreviation's components. Are there other characters or sequences which should be prohibited?
-- Help me decide which option to choose:
-  - Use `-` as a wildcard. Simple but ugly. No one uses `-` as a wildcard.
-  - Use `//` as a wildcard (i.e. `kn a//b`). Quite intuitive. The downside is that I would have to implement my own algorithm to split the path correctly.
-  - Remove wildcards.
-  - Something else?
 
 
 # TODO
