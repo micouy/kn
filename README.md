@@ -17,36 +17,29 @@
 [Demo](https://asciinema.org/a/406626?speed=2)
 
 ```
-test-dir
-├── boo
-│  └── buzz
-├── buzz
-├── bazz
-└── foo
-   ├── bizz
-   └── bazz
+.
+├── foo
+│  └── bar
+├── bar
+├── photosxxxxxxxxxxx2021
+└── photosxxxxxxxxxxx2020
 ```
 
-```
-$ kn              # enter ~
-$ kn ~            # also enter ~
-
-$ kn -            # go back to previous location
-
-$ kn tes/fo/iz    # enter test-dir/foo/bizz
-
-$ kn tes/baz      # enter test-dir/bazz
-
-$ kn tes/-/baz    # enter test-dir/foo/bazz
-
-$ kn -/bo/uzz     # enter test-dir/boo/buzz
+```bash
+$ kn foo/bar       # Use `kn` just like `cd`...
+$ kn pho/pho2021   # ...or navigate with abbreviations!
+$ kn -/bar         # Wildcards let you skip a dir name altogether (./foo/bar/).
+$ kn bar           # `kn` returns the shortest match (./bar/).
 ```
 
-`kn ~`, `kn ..`, `kn .`, `kn /` work just like with cd.
-
-`kn a/-/b` means "Go to `b` in any dir which is in `a`.".
-`kn -/a` means "Go to `a` in any dir which is in current dir.".
-`kn /-/a` means "Go to `a` in any dir which is in root.".
+```bash
+$ kn .            # Stay in current dir.
+$ kn ..           # Enter parent dir.
+$ kn /            # Enter root dir.
+$ kn              # Enter home dir.
+$ kn ~            # Also enter home dir.
+$ kn -            # Go to previous location.
+```
 
 <details>
 <summary>Details about the ordering of found paths</summary>
@@ -80,15 +73,16 @@ apple/y/b      Partial(4) / Wildcard / Complete      2.
 
 # Installation
 
-## Building the binary
+Install `kn` from `crates.io`
 
-Install `kn` from `crates.io`:
-
-1. `cargo install kn`
+```bash
+cargo install kn
+```
 
 **OR**
 
-Build binary from source:
+<details>
+<summary>Build binary from source</summary>
 
 1. `git clone https://github.com/micouy/kn.git`
 2. `cd kn`
@@ -101,23 +95,22 @@ Build binary from source:
    `cargo build --release`
 
    `cp target/release/_kn DIR_IN_PATH`
+</details>
 
+Then add this line to the config of your shell (notice the underscore in `_kn`):
 
-## Configuring your shell
+* **fish** (usually `~/.config/fish/config.fish`):
 
-1. Add this line to the config of your shell (notice the underscore in `_kn`):
+  `_kn init fish | source`
+* **bash** (usually `~/.bashrc`):
 
-   * **fish** (usually `~/.config/fish/config.fish`):
+  `eval "$(_kn init bash)"`
 
-     `_kn init fish | source`
-   * **bash** (usually `~/.bashrc`):
+* **zsh** (usually `~/.zshrc`):
 
-     `eval "$(_kn init bash)"`
+  `eval "$(_kn init zsh)"`
 
-   * **zsh** (usually `~/.zshrc`):
-
-     `eval "$(_kn init zsh)"`
-2. To be able to use `kn`, reload your config or launch a new shell instance.
+To be able to use `kn`, reload your config or launch a new shell instance.
 
 
 # Help wanted
