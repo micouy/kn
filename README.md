@@ -1,5 +1,7 @@
 # `kn` */n/*
 
+![Github Actions badge](https://github.com/micouy/kn/actions/workflows/build-and-tests.yml/badge.svg)
+
 `kn` is an alternative to `cd`. It lets you navigate quickly by typing abbreviations. It doesn't track frecency or any other statistics - it's **dumb, predictable and good at one thing**.
 
 **WARNING**: This project is in its alpha stage.
