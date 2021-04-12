@@ -14,7 +14,7 @@
 
 # Features
 
-[Demo](https://asciinema.org/a/406626?speed=2)
+[![Demo](https://asciinema.org/a/406626.svg)](https://asciinema.org/a/406626?speed=2)
 
 ```
 .
