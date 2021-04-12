@@ -6,7 +6,7 @@
 
 **WARNING**: This project is in its alpha stage.
 
-![demo](demo.svg)
+![demo](assets/demo.svg)
 
 [Watch demo.](https://asciinema.org/a/406626?speed=2)
 
