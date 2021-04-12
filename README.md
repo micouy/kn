@@ -1,7 +1,7 @@
 # `kn` */n/*
 
 ![Github Actions badge](https://github.com/micouy/kn/actions/workflows/build-and-tests.yml/badge.svg)
-![crates.io badge](https://img.shields.io/crates/v/$CRATE.svg)
+![crates.io badge](https://img.shields.io/crates/v/kn.svg)
 
 `kn` is an alternative to `cd`. It lets you navigate quickly by typing abbreviations. It doesn't track frecency or any other statistics - it's **dumb, predictable and good at one thing**.
 
