@@ -12,47 +12,6 @@
 **WARNING**: This project is in its alpha stage.
 
 
-# Installation
-
-## Building the binary
-
-Install `kn` from `crates.io`:
-
-1. `cargo install kn`
-
-**OR**
-
-Build binary from source:
-
-1. `git clone https://github.com/micouy/kn.git`
-2. `cd kn`
-3. Put the binary in a folder that is in `PATH`:
-
-   `cargo build -Z unstable-options --out-dir DIR_IN_PATH --release`
-
-   Or just build it and copy the binary to that dir:
-
-   `cargo build --release`
-   `cp target/release/_kn DIR_IN_PATH`
-
-
-## Configuring your shell
-
-1. Add this line to the config of your shell (notice the underscore in `_kn`):
-
-   * **fish** (usually `~/.config/fish/config.fish`):
-
-     `_kn init fish | source`
-   * **bash** (usually `~/.bashrc`):
-
-     `eval "$(_kn init bash)"`
-
-   * **zsh** (usually `~/.zshrc`):
-
-     `eval "$(_kn init zsh)"`
-2. To be able to use `kn`, reload your config or launch a new shell instance.
-
-
 # Features
 
 [Demo](https://asciinema.org/a/406626?speed=2)
@@ -117,6 +76,47 @@ a/x/bo         Complete   / Wildcard / Partial(1)    1.
 apple/y/b      Partial(4) / Wildcard / Complete      2.
 ```
 </details>
+
+
+# Installation
+
+## Building the binary
+
+Install `kn` from `crates.io`:
+
+1. `cargo install kn`
+
+**OR**
+
+Build binary from source:
+
+1. `git clone https://github.com/micouy/kn.git`
+2. `cd kn`
+3. Put the binary in a folder that is in `PATH`:
+
+   `cargo build -Z unstable-options --out-dir DIR_IN_PATH --release`
+
+   Or just build it and copy the binary to that dir:
+
+   `cargo build --release`
+   `cp target/release/_kn DIR_IN_PATH`
+
+
+## Configuring your shell
+
+1. Add this line to the config of your shell (notice the underscore in `_kn`):
+
+   * **fish** (usually `~/.config/fish/config.fish`):
+
+     `_kn init fish | source`
+   * **bash** (usually `~/.bashrc`):
+
+     `eval "$(_kn init bash)"`
+
+   * **zsh** (usually `~/.zshrc`):
+
+     `eval "$(_kn init zsh)"`
+2. To be able to use `kn`, reload your config or launch a new shell instance.
 
 
 # Help wanted
