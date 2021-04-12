@@ -1,28 +1,47 @@
 [package]
 name = "kn"
-description = "cd alternative - navigate by matching slices of path"
 version = "0.1.0"
-authors = ["micouy <m.powierza@tutanota.com>"]
 edition = "2018"
+autobins = false
+include = [
+    "**/*.rs",
+    "init",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "LICENSE.txt",
+    "rustfmt.toml",
+]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["micouy <m.powierza@tutanota.com>"]
+description = "`cd` alternative. Navigate by typing abbreviation of paths."
+repository = "https://github.com/micouy/kn"
+readme = "README.md"
+license = "MIT"
+
+categories = ["command-line-utilities", "filesystem"]
+keywords = ["cli", "utility", "filesystem"]
+
 
 [[bin]]
 name = "_kn"
 path = "src/main.rs"
 
+
 [dependencies]
 regex = "1.4"
 clap = "2.33"
 thiserror = "1.0"
-pretty_env_logger = "*"
+pretty_env_logger = "0.4"
 log = { version = "0.4", features = ["release_max_level_off"] }
 tera = { version = "1", default-features = false }
-ansi_term = "*"
+ansi_term = "0.12"
 strsim = "0.10"
 
+
 [dev-dependencies]
-pretty_assertions = "*"
+pretty_assertions = "0.7"
+
 
 [profile.release]
 lto = true
