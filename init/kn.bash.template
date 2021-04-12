@@ -2,11 +2,11 @@
 
 
 function kn() {
-    if [[ $# -eq 0 ]]; then
+    if [[ "$#" -eq 0 ]]; then
         # no args provided, go to home dir
 
         \builtin cd ~
-    elif [[ $# -eq 1 ]] && [[ $1 = '-' ]]; then
+    elif [[ "$#" -eq 1 ]] && [[ "$1" = '-' ]]; then
         # only dash provided, go to previous location if it exists
 
         if [[ -n "${OLDPWD}" ]]; then

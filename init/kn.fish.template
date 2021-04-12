@@ -8,7 +8,7 @@ function kn
         # no args provided, go to home dir
         
         cd $HOME
-    else if begin; test $argc -eq 1; and test $argv[1] = '-'; end
+    else if begin; test $argc -eq 1; and test "$argv[1]" = '-'; end
         # only dash provided, go to previous location
         
         cd -
@@ -24,7 +24,7 @@ function kn
         end)
  
         and if test -d "$__kn_result"
-            cd $__kn_result
+            cd "$__kn_result"
         end
     end
 end
