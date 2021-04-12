@@ -99,6 +99,7 @@ Build binary from source:
    Or just build it and copy the binary to that dir:
 
    `cargo build --release`
+
    `cp target/release/_kn DIR_IN_PATH`
 
 
