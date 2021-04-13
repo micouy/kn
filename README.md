@@ -1,6 +1,6 @@
 # `kn` */n/*
 
-![Github Actions badge](https://github.com/micouy/kn/actions/workflows/build-and-tests.yml/badge.svg)
+![Github Actions badge](https://github.com/micouy/kn/actions/workflows/tests.yml/badge.svg)
 ![crates.io badge](https://img.shields.io/crates/v/kn.svg)
 
 <p align="center">
