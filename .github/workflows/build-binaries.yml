@@ -1,0 +1,61 @@
+# Repurposed from `https://github.com/alexpdp7/cmdocker/blob/master/.github/workflows/quickstart.yml#L73`.
+
+on:
+  push:
+    tags:
+      - '*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-binary-non-windows:
+    needs: [test]
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        runs-on:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --release
+    - name: Upload binary
+      uses: actions/upload-artifact@v1
+      with:
+        name: kn-${{ matrix.runs-on }}
+        path: target/release/_kn
+
+  build-binary-windows:
+    needs: [test]
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        runs-on:
+          - windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --release
+    - name: Upload binary
+      uses: actions/upload-artifact@v1
+      with:
+        name: kn-${{ matrix.runs-on }}
+        path: target/release/_kn.exe
