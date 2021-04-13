@@ -4,17 +4,19 @@
 ![crates.io badge](https://img.shields.io/crates/v/kn.svg)
 
 <p align="center">
-<img src="assets/demo.svg" width="70%" />
+<img src="assets/demo.svg" />
 </p>
 
-`kn` is an alternative to `cd`. It lets you navigate quickly by typing abbreviations. It doesn't track frecency or any other statistics - it's **dumb, predictable and good at one thing**.
+`kn` is an alternative to `cd`. It lets you navigate quickly by typing abbreviations. It doesn't track frecency or any other statistics.
 
 **WARNING**: This project is in its alpha stage.
 
 
 # Features
 
-[![Demo](https://asciinema.org/a/406626.svg)](https://asciinema.org/a/406626?speed=2)
+<p align="center">
+<a href="https://asciinema.org/a/406626?speed=2"><img src="https://asciinema.org/a/406626.svg" alt="Demo" /></a>
+</p>
 
 ```
 .
@@ -73,6 +75,8 @@ apple/y/b      Partial(4) / Wildcard / Complete      2.
 
 # Installation
 
+## Getting the binary
+
 Install `kn` from `crates.io`
 
 ```bash
@@ -97,6 +101,15 @@ cargo install kn
    `cp target/release/_kn DIR_IN_PATH`
 </details>
 
+**OR**
+
+Download a binary of the [latest release](https://github.com/micouy/kn/releases/latest) for your OS and move it to a directory which is in your `$PATH`. You may need to change the binary's permissions by running `chmod +x _kn`.
+
+If there are any problems with the pre-compiled binaries, file an issue.
+
+
+## Configuring your shell
+
 Then add this line to the config of your shell (notice the underscore in `_kn`):
 
 * **fish** (usually `~/.config/fish/config.fish`):
@@ -119,7 +132,8 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 
 - Check the correctness of scripts in [init/](init/).
 - Add scripts and installation instructions for shells other than `fish`, `bash` and `zsh`.
-- Check regular expressions used in `Abbr::from_string` in `src/query/abbr.rs` to validate abbreviation's components. Are there other characters or sequences which should be prohibited?
+- Review regular expressions used in `Abbr::from_string` in `src/query/abbr.rs` to validate abbreviation's components. Are there other characters or sequences which should be prohibited?
+- Review Github Actions workflows in [.github/workflows/](.github/workflows/).
 
 
 # TODO
