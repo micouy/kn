@@ -1,7 +1,7 @@
 # `kn` */n/*
 
 ![Github Actions badge](https://github.com/micouy/kn/actions/workflows/tests.yml/badge.svg)
-![crates.io badge](https://img.shields.io/crates/v/kn.svg)
+[![crates.io badge](https://img.shields.io/crates/v/kn.svg)](https://crates.io/crates/kn)
 
 <p align="center">
 <img src="assets/demo.svg" />
