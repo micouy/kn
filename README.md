@@ -29,9 +29,8 @@
 
 ```bash
 $ kn foo/bar       # Use `kn` just like `cd`...
-$ kn pho/pho2021   # ...or navigate with abbreviations!
+$ kn pho2021       # ...or navigate with abbreviations!
 $ kn -/bar         # Wildcards let you skip a dir name altogether (./foo/bar/).
-$ kn bar           # `kn` returns the shortest match (./bar/).
 ```
 
 ```bash
