@@ -123,6 +123,11 @@ Then add this line to the config of your shell (notice the underscore in `_kn`):
 
   `eval "$(_kn init zsh)"`
 
+* **PowerShell** (in your profile):
+  ```
+  Invoke-Expression (& { (_kn init powershell) -join "`n" })
+  ```
+
 To be able to use `kn`, reload your config or launch a new shell instance.
 
 
@@ -152,3 +157,4 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 - [ ] Add `--help` to `kn` function. (How?)
 - [ ] Read about [`broot`](https://github.com/Canop/broot).
 - [ ] Enable excluding dirs.
+- [ ] Add option to exclude last mismatch (`_kn query --exclude $OLDPWD`).

@@ -15,6 +15,7 @@ pub fn init(matches: &ArgMatches<'_>) -> Result<String> {
         "fish" => include_str!("../../init/kn.fish.template"),
         "bash" => include_str!("../../init/kn.bash.template"),
         "zsh" => include_str!("../../init/kn.zsh.template"),
+        "powershell" => include_str!("../../init/kn.powershell.template"),
         _ => return Err(Error::InvalidArgValue("shell".to_string())),
     };
 
