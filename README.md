@@ -27,19 +27,27 @@
 └── photosxxxxxxxxxxx2020
 ```
 
-```bash
-$ kn foo/bar       # Use `kn` just like `cd`...
-$ kn pho2021       # ...or navigate with abbreviations!
-$ kn -/bar         # Wildcards let you skip a dir name altogether (./foo/bar/).
-```
 
 ```bash
-$ kn .            # Stay in current dir.
-$ kn ..           # Enter parent dir.
-$ kn /            # Enter root dir.
-$ kn              # Enter home dir.
-$ kn ~            # Also enter home dir.
-$ kn -            # Go to previous location.
+$ kn foo/bar          # Use `kn` just like `cd`...
+$ kn fo/br            # ...or navigate with abbreviations!
+$ kn pho2021          # Type only the significant parts of the dir name. You can skip the middle part.
+$ kn -/bar            # Wildcards to skip a dir name altogether (./foo/bar/).
+```
+
+The basic feature of `kn` is that it lets you type abbreviations instead of full dir names. Instead of `foo/bar` you can type `fo/ba`.
+
+You can also use wildcards `-` to avoid typing a dir name altogether i.e. kn `-/beta` to go to `alpha/beta`. **Note that `kn alph-/bet-` will not match `alhpa/beta`. In this case `-` functions as a literal character.**
+
+These also work:
+
+```bash
+$ kn .           # Stay in current dir.
+$ kn ..          # Enter parent dir.
+$ kn /           # Enter root dir.
+$ kn             # Enter home dir.
+$ kn ~           # Also enter home dir.
+$ kn -           # Go to previous location.
 ```
 
 <details>
@@ -137,6 +145,13 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 
 # TODO
 
+## Interactive mode
+
+- [ ] Display 3 suggestions at most, preferably right below the prompt.
+- [ ] Handle each component separately, not like `fzf` which matches whole paths.
+- [ ] Make backspace remove whole component, like in `amp`.
+
+
 ## Search engine
 
 - [ ] What to do about `.` and `..` in the middle of path abbreviation? With `..` in paths the results would be too unpredictable. Are there any situations when `..` show up in path? The user probably wouldn't type it but a command line tool could return such path.
@@ -147,7 +162,5 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 
 ## CLI experience
 
-- [ ] Make `kn` somewhat interactive. Tab could confirm the path `kn` has found so far and the search could begin from that location. That would narrow down the search. (Is that possible with `fish` and other shells?)
-- [ ] Add `--help` to `kn` function. (How?)
-- [ ] Read about [`broot`](https://github.com/Canop/broot).
+- [ ] Add `--help` to `kn` function.
 - [ ] Enable excluding dirs.

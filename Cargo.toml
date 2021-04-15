@@ -27,8 +27,13 @@ keywords = ["cli", "utility", "filesystem"]
 name = "_kn"
 path = "src/main.rs"
 
+[[bin]]
+name = "_km"
+path = "src/interactive.rs"
+
 
 [dependencies]
+# kn
 regex = "1.4"
 clap = "2.33"
 thiserror = "1.0"
@@ -37,6 +42,9 @@ log = { version = "0.4", features = ["release_max_level_off"] }
 tera = { version = "1", default-features = false }
 ansi_term = "0.12"
 strsim = "0.10"
+
+# km
+termion = "*"
 
 
 [dev-dependencies]
