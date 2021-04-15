@@ -1,22 +1,57 @@
 # Repurposed from `https://github.com/alexpdp7/cmdocker/blob/master/.github/workflows/quickstart.yml#L73`.
 
+name: Build binaries
+
 on:
   push:
-    tags:
-      - '*'
+    branches: [release]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-binary-non-windows:
-    needs: [test]
-    runs-on: ${{ matrix.runs-on }}
-    strategy:
-      matrix:
-        runs-on:
-          - ubuntu-latest
-          - macos-latest
+  build-binary-linux-gnu:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        target: x86_64-unknown-linux-gnu
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --release --target x86_64-unknown-linux-gnu
+    - name: Upload binary
+      uses: actions/upload-artifact@v1
+      with:
+        name: kn-x86_64-unknown-linux-gnu
+        path: target/release/_kn
+
+  build-binary-linux-musl:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        target: x86_64-unknown-linux-musl
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --release --target x86_64-unknown-linux-musl
+    - name: Upload binary
+      uses: actions/upload-artifact@v1
+      with:
+        name: kn-x86_64-unknown-linux-musl
+        path: target/release/_kn
+
+  build-binary-macos:
+    runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v2
@@ -25,23 +60,19 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
+        target: x86_64-apple-darwin
     - uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --release
+        args: --release --target x86_64-apple-darwin
     - name: Upload binary
       uses: actions/upload-artifact@v1
       with:
-        name: kn-${{ matrix.runs-on }}
+        name: kn-x86_64-apple-darwin
         path: target/release/_kn
 
   build-binary-windows:
-    needs: [test]
-    runs-on: ${{ matrix.runs-on }}
-    strategy:
-      matrix:
-        runs-on:
-          - windows-latest
+    runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v2
@@ -50,12 +81,13 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
+        target: x86_64-pc-windows-msvc
     - uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --release
+        args: --release --target x86_64-pc-windows-msvc
     - name: Upload binary
       uses: actions/upload-artifact@v1
       with:
-        name: kn-${{ matrix.runs-on }}
+        name: kn-x86_64-pc-windows-msvc
         path: target/release/_kn.exe
