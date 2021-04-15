@@ -17,18 +17,19 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: stable
+        toolchain: nightly
         override: true
         target: x86_64-unknown-linux-gnu
+    - run: mkdir bin
     - uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --release --target x86_64-unknown-linux-gnu
+        args: --release --target x86_64-unknown-linux-gnu -Z unstable-options --out-dir bin
     - name: Upload binary
       uses: actions/upload-artifact@v1
       with:
         name: kn-x86_64-unknown-linux-gnu
-        path: target/release/_kn
+        path: bin/_kn
 
   build-binary-linux-musl:
     runs-on: ubuntu-latest
@@ -37,18 +38,19 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: stable
+        toolchain: nightly
         override: true
         target: x86_64-unknown-linux-musl
+    - run: mkdir bin
     - uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --release --target x86_64-unknown-linux-musl
+        args: --release --target x86_64-unknown-linux-musl -Z unstable-options --out-dir bin
     - name: Upload binary
       uses: actions/upload-artifact@v1
       with:
         name: kn-x86_64-unknown-linux-musl
-        path: target/release/_kn
+        path: bin/_kn
 
   build-binary-macos:
     runs-on: macos-latest
@@ -61,15 +63,16 @@ jobs:
         toolchain: stable
         override: true
         target: x86_64-apple-darwin
+    - run: mkdir bin
     - uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --release --target x86_64-apple-darwin
+        args: --release --target x86_64-apple-darwin -Z unstable-options --out-dir bin
     - name: Upload binary
       uses: actions/upload-artifact@v1
       with:
         name: kn-x86_64-apple-darwin
-        path: target/release/_kn
+        path: bin/_kn
 
   build-binary-windows:
     runs-on: windows-latest
@@ -82,12 +85,13 @@ jobs:
         toolchain: stable
         override: true
         target: x86_64-pc-windows-msvc
+    - run: mkdir bin
     - uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --release --target x86_64-pc-windows-msvc
+        args: --release --target x86_64-pc-windows-msvc -Z unstable-options --out-dir bin
     - name: Upload binary
       uses: actions/upload-artifact@v1
       with:
         name: kn-x86_64-pc-windows-msvc
-        path: target/release/_kn.exe
+        path: bin/_kn.exe
