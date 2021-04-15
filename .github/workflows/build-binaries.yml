@@ -60,7 +60,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: stable
+        toolchain: nightly
         override: true
         target: x86_64-apple-darwin
     - run: mkdir bin
@@ -82,7 +82,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: stable
+        toolchain: nightly
         override: true
         target: x86_64-pc-windows-msvc
     - run: mkdir bin
