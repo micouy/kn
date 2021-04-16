@@ -3,128 +3,112 @@ use crate::{utils::as_path, Error, Result};
 
 use std::{
     collections::VecDeque,
+    mem,
     path::{Component, Path, PathBuf},
 };
-
 
 use ansi_term::Colour::Red;
 use clap::ArgMatches;
 use log::{debug, info, trace};
 
+pub mod abbr;
+pub mod entry;
+pub mod search_engine;
 
-mod abbr;
-mod entry;
-mod search_engine;
-
-
-use abbr::Abbr;
+use abbr::{Abbr, Congruence};
 use entry::Entry;
 use search_engine::{ReadDirEngine, SearchEngine};
 
-
 pub fn query(matches: &ArgMatches<'_>) -> Result<Vec<PathBuf>> {
     trace!("Handling query.");
-
 
     let engine = ReadDirEngine;
     let (start_path, abbr) = parse_args(matches)?;
 
     trace!("Start path: `{}`.", start_path.display());
 
-    match abbr.as_slice() {
-        [first, rest @ ..] => search(start_path, first, rest, &engine),
-        [] => {
-            trace!("Only starting dir provided, returning.");
+    if abbr.is_empty() {
+        trace!("Only starting dir provided, returning.");
 
-
-            return Ok(vec![start_path]);
-        }
+        Ok(vec![start_path])
+    } else {
+        search(start_path, &abbr, &engine)
     }
 }
 
-
-fn search<P, E>(
-    start_path: P,
-    abbr: &Abbr,
-    rest: &[Abbr],
+fn search<E>(
+    start_path: PathBuf,
+    abbr: &[Abbr],
     engine: E,
 ) -> Result<Vec<PathBuf>>
 where
-    P: AsRef<Path>,
     E: SearchEngine,
 {
     use entry::Flow::*;
 
+    if abbr.is_empty() {
+        return Err(dev_err!("empty abbreviation"));
+    }
 
-    let mut queue = engine
-        .read_dir(start_path)
-        .into_iter()
-        .map(|subdir| Entry::new(subdir, abbr, rest))
-        .collect::<Result<VecDeque<_>>>()?;
+    // TODO: Find better names.
+    let mut findings: Vec<Entry> = vec![Entry::new(start_path, vec![])];
+    let mut current_level: Vec<Entry> = vec![];
 
-
-    let mut found: Option<(usize, Vec<Entry>)> = None;
-
-    while let Some(entry) = queue.pop_front() {
-        // Reject entries that are deeper than the ones in `found`.
-        if let Some((depth, _)) = found {
-            if entry.n_attempts() > depth {
-                continue;
-            }
+    for abbr_component in abbr.iter() {
+        if findings.is_empty() {
+            break;
         }
 
-        match entry.advance(&engine) {
-            DeadEnd => {
-                debug!(
-                    "Dead end `{}`.",
-                    Red.paint(entry.path().to_string_lossy())
-                );
-            }
-            Continue(children) => {
-                info!("Continue down `{}`.", entry.path().display());
-                queue.extend(children.into_iter());
-            }
-            FullMatch(entry) => {
-                info!("Full match `{}`.", entry.path().display());
+        for Entry { path, congruence } in findings.iter() {
+            info!("Continue down `{}`.", path.display());
 
-                // Update `found`.
-                match found {
-                    Some((_, ref mut entries)) => entries.push(entry),
-                    None => found = Some((entry.n_attempts(), vec![entry])),
+            let children = engine
+                .read_dir(path)
+                .into_iter()
+                .map(|child_path| Entry::new(child_path, congruence.clone()));
+
+            for child in children {
+                match child.advance(&abbr_component) {
+                    DeadEnd => {
+                        debug!(
+                            "Dead end `{}`.",
+                            Red.paint(child.path.to_string_lossy())
+                        );
+                    }
+                    Continue(entry) => {
+                        current_level.push(entry);
+                    }
                 }
             }
         }
+
+        mem::swap(&mut findings, &mut current_level);
     }
 
+    if current_level.is_empty() {
+        Err(Error::NoPathFound)
+    } else {
+        // TODO: Return an object containing details about matches?
+        trace!("Found entries:");
 
-    match found {
-        Some((_, entries)) => {
-            // TODO: Return an object containing details about matches?
-            trace!("Found entries:");
-
-            for entry in &entries {
-                trace!("Path: `{}`.", entry.path().display());
-                trace!("Congruence: `{:?}`.", entry.congruence());
-            }
-
-
-            let paths = get_ordered_paths(entries);
-
-            Ok(paths)
+        for entry in &current_level {
+            trace!("Path: `{}`.", entry.path.display());
+            trace!("Congruence: `{:?}`.", entry.congruence);
         }
-        None => Err(Error::NoPathFound),
+
+        let paths = get_ordered_paths(current_level);
+
+        Ok(paths)
     }
 }
 
-
-fn get_ordered_paths(mut entries: Vec<Entry<'_>>) -> Vec<PathBuf> {
-    entries.sort_by(|a, b| a.congruence().cmp(b.congruence()));
+fn get_ordered_paths(mut entries: Vec<Entry>) -> Vec<PathBuf> {
+    entries.sort_by(|a, b| a.congruence.cmp(&b.congruence));
 
     let paths = entries.into_iter().map(|entry| entry.path).collect();
 
     paths
 }
-
 
 fn parse_args(matches: &ArgMatches<'_>) -> Result<(PathBuf, Vec<Abbr>)> {
     trace!("Parsing args.");
@@ -161,20 +145,16 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<(PathBuf, Vec<Abbr>)> {
 
     trace!("Abbreviation `{:?}`.", abbr);
 
-
     Ok((start_path, abbr))
 }
-
 
 fn extract_start_path<'p>(
     arg: &'p Path,
 ) -> (Option<PathBuf>, Vec<Component<'p>>) {
     trace!("Extracting start path.");
 
-
     let mut suffix = arg.components().peekable();
     let mut prefix: Option<PathBuf> = None;
-
 
     // Handle cases `kn /**/*`, `kn C:/**/*`, `kn ../../**/*` etc..
     // Doesn't handle a literal tilde, it must be expanded by the shell.
@@ -198,7 +178,6 @@ fn extract_start_path<'p>(
     (prefix, suffix)
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -207,7 +186,6 @@ mod test {
     use std::collections::HashMap;
 
     use pretty_assertions::assert_eq;
-
 
     #[test]
     fn test_extract_start_path() {
@@ -218,14 +196,12 @@ mod test {
         assert!(start_path.is_none());
         assert_eq!(first_abbr, "a");
 
-
         // Root dir.
         let (start_path, suffix) = extract_start_path(as_path("/gn"));
         let first_abbr = suffix[0].as_os_str();
 
         assert_eq!(start_path.unwrap(), as_path("/"));
         assert_eq!(first_abbr, "gn");
-
 
         // Multiple `..` and `.`.
         let (start_path, suffix) = extract_start_path(as_path(".././../do"));
@@ -235,12 +211,10 @@ mod test {
         assert_eq!(first_abbr, "do");
     }
 
-
     #[test]
     fn test_entry_walk() {
         use abbr::Congruence::*;
         use entry::Flow::*;
-
 
         // Test path: `a/b`.
         let mut search_engine = HashMap::new();
@@ -251,17 +225,14 @@ mod test {
         let abbr = Abbr::from_string("a".to_string()).unwrap();
         let rest = vec![Abbr::from_string("b".to_string()).unwrap()];
 
-
         // The square brackets indicate which component will be matched against
         // which abbreviation.
-
 
         // path: [a]
         // slices: [a]/b
         let entry_a = Entry::new("a".into(), &abbr, &rest).unwrap();
         assert_eq!(entry_a.path(), as_path("a"));
         let result = entry_a.advance(&search_engine);
-
 
         // path: a/[boo]
         // slices: a/[b]
@@ -274,11 +245,9 @@ mod test {
         variant!(entry_ab.congruence(), [Complete, Partial(_)]);
     }
 
-
     #[test]
     fn test_dead_end() {
         use entry::Flow::*;
-
 
         // Test path: `a/b`.
         let mut search_engine = HashMap::new();
@@ -288,13 +257,11 @@ mod test {
         let abbr = Abbr::from_string("a".to_string()).unwrap();
         let rest = vec![Abbr::from_string("b".to_string()).unwrap()];
 
-
         // path: [a]
         // slices: [a]/b
         let entry_a = Entry::new("a".into(), &abbr, &rest).unwrap();
         assert_eq!(entry_a.path(), as_path("a"));
         let result = entry_a.advance(&search_engine);
-
 
         // path: a/[b]
         // slices: a/[b]

@@ -2,7 +2,6 @@
 
 use thiserror::Error;
 
-
 /// `kn` error.
 #[derive(Debug, Error)]
 pub enum Error {

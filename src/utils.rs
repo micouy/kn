@@ -1,13 +1,11 @@
 use std::{convert::AsRef, path::Path};
 
-
 pub fn as_path<P>(path: &P) -> &Path
 where
     P: AsRef<Path> + ?Sized,
 {
     path.as_ref()
 }
-
 
 // Inspired by `https://doc.rust-lang.org/stable/std/macro.matches.html`.
 #[cfg(test)]
@@ -27,7 +25,6 @@ macro_rules! variant {
         }
     };
 }
-
 
 macro_rules! dev_err {
     ($cause:expr) => {

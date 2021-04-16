@@ -1,12 +1,9 @@
 use crate::{Error, Result};
 
-
 use std::cmp::Ordering;
-
 
 use regex::Regex;
 use strsim::levenshtein as str_distance;
-
 
 #[derive(Debug, Clone)]
 pub enum Abbr {
@@ -14,14 +11,12 @@ pub enum Abbr {
     Wildcard,
 }
 
-
 impl Abbr {
     pub fn from_string(pattern: String) -> Result<Self> {
         // Invalid characters: /, \, any whitespace.
         let invalid_re = Regex::new(r"[/\\\s]").unwrap();
 
         let only_dots_re = Regex::new(r"^\.+$").unwrap();
-
 
         if pattern == "-" {
             Ok(Self::Wildcard)
@@ -36,14 +31,12 @@ impl Abbr {
                 return Err(Error::InvalidAbbr(pattern));
             }
 
-
             Ok(Self::Literal(pattern.to_ascii_lowercase()))
         }
     }
 
     pub fn compare(&self, component: &str) -> Option<Congruence> {
         use Congruence::*;
-
 
         let component = component.to_ascii_lowercase();
 
@@ -79,7 +72,6 @@ impl Abbr {
     }
 }
 
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Congruence {
     Partial(usize),
@@ -87,19 +79,16 @@ pub enum Congruence {
     Complete,
 }
 
-
 impl PartialOrd for Congruence {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-
 impl Ord for Congruence {
     fn cmp(&self, other: &Self) -> Ordering {
         use Congruence::*;
         use Ordering::*;
-
 
         match (self, other) {
             (Complete, Complete) => Equal,
@@ -115,12 +104,10 @@ impl Ord for Congruence {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
     use Congruence::*;
-
 
     #[test]
     fn test_congruence_ordering() {
@@ -129,7 +116,6 @@ mod test {
         assert!(Complete < Wildcard);
         assert!(Partial(1000) < Wildcard);
     }
-
 
     #[test]
     fn test_from_string() {
@@ -142,7 +128,6 @@ mod test {
         //
         // Ultimately `kn` should be at least as good as `cd`.
 
-
         let abbr = |s: &str| Abbr::from_string(s.to_string());
 
         assert!(abbr(".").is_err());
@@ -152,7 +137,6 @@ mod test {
         assert!(abbr("du\tpa").is_err());
         assert!(abbr("\n").is_err());
         assert!(abbr(r"a\b").is_err());
-
 
         let abbr = |s: &str| Abbr::from_string(s.to_string()).unwrap();
 
@@ -165,21 +149,17 @@ mod test {
         );
     }
 
-
     #[test]
     fn test_wildcard_match() {
         let abbr = Abbr::Wildcard;
-
 
         variant!(abbr.compare("iks"), Some(Wildcard));
         variant!(abbr.compare("eh--ehe123"), Some(Wildcard));
     }
 
-
     #[test]
     fn test_literal_match() {
         let abbr = Abbr::Literal("mi".to_string());
-
 
         variant!(abbr.compare("mi"), Some(Complete));
         variant!(abbr.compare("Mi"), Some(Complete));
@@ -188,11 +168,9 @@ mod test {
         variant!(abbr.compare("xxxxxx"), None);
     }
 
-
     #[test]
     fn test_subseries_match() {
         let abbr = Abbr::Literal("mi".to_string());
-
 
         let dist_a =
             variant!(abbr.compare("m-----i"), Some(Partial(dist_a)) => dist_a);
