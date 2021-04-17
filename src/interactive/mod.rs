@@ -1,8 +1,7 @@
-#![allow(dead_code)]
-
+use clap::ArgMatches;
 use std::{
     fs,
-    io::{stdin, stdout, Write},
+    io::{stdin, stdout, Stdout, Write},
     mem,
     path::PathBuf,
     process::exit,
@@ -15,64 +14,59 @@ use termion::{
     raw::IntoRawMode,
 };
 
-#[macro_use]
-mod utils;
-mod error;
-mod query;
-
-use query::{
-    abbr::{Abbr, Congruence},
-    entry::{Entry, Flow},
-    search_engine::{ReadDirEngine, SearchEngine},
+use crate::{
+    error::{Error, Result},
+    query::{
+        abbr::{Abbr, Congruence},
+        entry::{Entry, Flow},
+        search_engine::{ReadDirEngine, SearchEngine},
+    },
 };
 
-pub use error::Error;
-pub type Result<T> = std::result::Result<T, Error>;
-
-fn main() {
-    let file = std::env::args().nth(1).unwrap();
+pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
+    let file = matches
+        .value_of_os("TMP_FILE")
+        .ok_or(dev_err!("required arg absent"))?;
     let stdin = stdin();
-    let mut stdout = stdout().into_raw_mode().unwrap();
+    let mut stdout = stdout().into_raw_mode()?;
 
     // Make room for input and results.
-    write!(stdout, "\n").unwrap();
-    stdout.flush().unwrap();
+    write!(stdout, "\n")?;
+    stdout.flush()?;
 
-    write!(stdout, "{}", cursor::Up(1)).unwrap();
-    stdout.flush().unwrap();
+    write!(stdout, "{}", cursor::Up(1))?;
+    stdout.flush()?;
 
     let mut search = Search::new(ReadDirEngine);
 
     for c in stdin.keys() {
-        let results = match c.unwrap() {
+        let results = match c? {
             Key::Ctrl('c') => {
-                let current_line = stdout.cursor_pos().unwrap().1;
+                let current_line = stdout.cursor_pos()?.1;
                 write!(
                     stdout,
                     "{}{}",
                     cursor::Goto(1, current_line),
                     clear::AfterCursor,
-                )
-                .unwrap();
-                stdout.flush().unwrap();
+                )?;
+                stdout.flush()?;
 
-                exit(1);
+                return Err(Error::CtrlC);
             }
             Key::Char('\n') => {
-                let found_path = search.get_path().unwrap();
-                fs::write(file, &*found_path.to_string_lossy()).unwrap();
+                let found_path = search.get_path().ok_or(Error::NoPathFound)?;
+                fs::write(file, &*found_path.to_string_lossy())?;
 
-                let current_line = stdout.cursor_pos().unwrap().1;
+                let current_line = stdout.cursor_pos()?.1;
                 write!(
                     stdout,
                     "{}{}",
                     cursor::Goto(1, current_line),
                     clear::AfterCursor,
-                )
-                .unwrap();
-                stdout.flush().unwrap();
+                )?;
+                stdout.flush()?;
 
-                exit(0);
+                return Ok(());
             }
             Key::Char(c) => Some(search.consume_char(c)),
             Key::Backspace => Some(search.delete()),
@@ -80,48 +74,66 @@ fn main() {
         };
 
         if let Some((string, findings)) = results {
-            let current_line = stdout.cursor_pos().unwrap().1;
-            write!(
-                stdout,
-                "{}{}{}",
-                clear::CurrentLine,
-                cursor::Goto(1, current_line),
-                string,
-            )
-            .unwrap();
-
-            if let Some(finding) = findings.get(0) {
-                write!(stdout, "{}{}", cursor::Save, cursor::Down(1)).unwrap();
-                let current_line = stdout.cursor_pos().unwrap().1;
-                write!(
-                    stdout,
-                    "{}{}{}{}",
-                    cursor::Goto(1, current_line),
-                    clear::CurrentLine,
-                    finding.path.display(),
-                    cursor::Restore,
-                )
-                .unwrap();
-            } else {
-                write!(stdout, "{}{}", cursor::Save, cursor::Down(1)).unwrap();
-                let current_line = stdout.cursor_pos().unwrap().1;
-                write!(
-                    stdout,
-                    "{}{}{}",
-                    cursor::Goto(1, current_line),
-                    clear::CurrentLine,
-                    cursor::Restore,
-                )
-                .unwrap();
-            }
-
-            stdout.flush().unwrap();
+            print_state(string, findings, &mut stdout)?;
         }
     }
+
+    Err(Error::NoPathFound)
 }
 
+fn print_state(
+    query: String,
+    findings: Vec<Entry>,
+    stdout: &mut Stdout,
+) -> Result<()> {
+    let current_line = stdout.cursor_pos()?.1;
+    write!(
+        stdout,
+        "{}{}{}",
+        clear::CurrentLine,
+        cursor::Goto(1, current_line),
+        query,
+    )?;
+
+    if let Some(finding) = findings.get(0) {
+        write!(stdout, "{}{}", cursor::Save, cursor::Down(1))?;
+        let current_line = stdout.cursor_pos()?.1;
+        write!(
+            stdout,
+            "{}{}{}{}",
+            cursor::Goto(1, current_line),
+            clear::CurrentLine,
+            finding.path.display(),
+            cursor::Restore,
+        )?;
+    } else {
+        write!(stdout, "{}{}", cursor::Save, cursor::Down(1))?;
+        let current_line = stdout.cursor_pos()?.1;
+        write!(
+            stdout,
+            "{}{}{}",
+            cursor::Goto(1, current_line),
+            clear::CurrentLine,
+            cursor::Restore,
+        )?;
+    }
+
+    stdout.flush()?;
+
+    Ok(())
+}
+
+// TODO: Rename.
+// TODO: Make this code much more declarative.
 fn print_abbr(abbr: &[Finding], last: &str) -> String {
-    let abbr = abbr
+    let start_ix = abbr.len().saturating_sub(4);
+    let end_ix = abbr.len();
+    let prefix = if start_ix == 0 {
+        ""
+    } else {
+        "…/"
+    }.to_string();
+    let abbr = abbr[start_ix..end_ix]
         .iter()
         .map(|Finding { abbr, .. }| match abbr {
             Abbr::Literal(s) => s,
@@ -129,7 +141,7 @@ fn print_abbr(abbr: &[Finding], last: &str) -> String {
         })
         .fold(String::new(), |abbr, component| abbr + component + "/");
 
-    abbr + last
+    prefix + &abbr + last
 }
 
 enum Prefix {
@@ -257,11 +269,11 @@ where
             .collect();
         entries.sort_by(|a, b| a.congruence.cmp(&b.congruence));
 
-		if entries.get(0).is_some() {
-        	Some(entries.remove(0).path)
-		} else {
-    		None
-		}
+        if entries.get(0).is_some() {
+            Some(entries.remove(0).path)
+        } else {
+            None
+        }
     }
 
     fn delete(&mut self) -> (String, Vec<Entry>) {
@@ -299,4 +311,9 @@ where
 
         (input, vec![])
     }
+}
+
+pub enum SearchResults<'a> {
+    Findings(&'a [Entry]),
+    Suggestions(&'a [Entry]),
 }

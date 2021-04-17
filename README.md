@@ -147,14 +147,18 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 
 ## Interactive mode
 
-- [ ] Display 3 suggestions at most, preferably right below the prompt.
-- [ ] Handle each component separately, not like `fzf` which matches whole paths.
-- [ ] Make backspace remove whole component, like in `amp`.
+- [x] Display 3 suggestions at most, preferably right below the prompt.
+- [x] Handle each component separately, not like `fzf` which matches whole paths.
+- [x] Make backspace remove whole component, like in `amp`.
+- [x] When displaying findings or the search string, trim it down to the last n components.
+- [ ] Handle `..`, `/`, `.` and `~` in the prefix. Expand `~` to `$HOME`? [Difference between `$HOME` and tilde.](https://stackoverflow.com/questions/11587343/difference-between-home-and-tilde)
+- [ ] Fix tests.
+- [ ] Flash suggestions? Or show them scrolling horizontally (co to za zdanie brzydkie)? Or display the possible first chars? Or only the first 2-3 chars of each? I don't want to display all the options like the shell or `ls` does.
 
 
 ## Search engine
 
-- [ ] What to do about `.` and `..` in the middle of path abbreviation? With `..` in paths the results would be too unpredictable. Are there any situations when `..` show up in path? The user probably wouldn't type it but a command line tool could return such path.
+- [ ] What to do about `.` and `..` components in the middle of path abbreviation? With `..` in paths the results would be too unpredictable. Are there any situations when `..` would show up in path? The user probably wouldn't type it but a command line tool could return such path.
 - [ ] Return objects containing details about the matches (the sequence of `Congruence`s with details about which chars have been matched). This will be useful in interactive mode.
 - [ ] Use inodes instead of traversing the directory structure using `read_dir()`. [Guide.](https://fasterthanli.me/series/reading-files-the-hard-way) Are there inodes on other OSes?
 - [ ] Read [Falsehoods programmers believe about paths](https://yakking.branchable.com/posts/falsehoods-programmers-believe-about-file-paths/).

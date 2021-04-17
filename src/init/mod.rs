@@ -1,9 +1,7 @@
 #[allow(dead_code)]
 use crate::{Error, Result};
 
-
 use clap::ArgMatches;
-
 
 pub fn init(matches: &ArgMatches<'_>) -> Result<String> {
     // Fail silently?
@@ -17,7 +15,6 @@ pub fn init(matches: &ArgMatches<'_>) -> Result<String> {
         "zsh" => include_str!("../../init/kn.zsh.template"),
         _ => return Err(Error::InvalidArgValue("shell".to_string())),
     };
-
 
     Ok(script.to_string())
 }

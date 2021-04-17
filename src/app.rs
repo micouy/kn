@@ -3,11 +3,11 @@
 use clap::{App, AppSettings, Arg, SubCommand};
 use log::trace;
 
+// TODO: Use consts instead of str literals.
 
 /// Creates [`clap::App`](clap::App).
 pub fn app() -> App<'static, 'static> {
     trace!("Creating app.");
-
 
     App::new(env!("CARGO_BIN_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
@@ -29,12 +29,22 @@ pub fn app() -> App<'static, 'static> {
         )
         .subcommand(
             SubCommand::with_name("query")
-                .setting(AppSettings::TrailingVarArg)
                 .help("Query for path matching the abbreviation.")
                 .arg(
                     Arg::with_name("ABBR")
                         .help("\"ABBR\" itself is an abbreviation.")
-                        .raw(true),
+                        .index(1)
+                        .required(true),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("interactive")
+                .help("Query for path matching the abbreviation.")
+                .arg(
+                    Arg::with_name("TMP_FILE")
+                        .help("Temporary file to write the found path to.")
+                        .index(1)
+                        .required(true),
                 ),
         )
 }

@@ -19,7 +19,7 @@ use abbr::{Abbr, Congruence};
 use entry::Entry;
 use search_engine::{ReadDirEngine, SearchEngine};
 
-pub fn query(matches: &ArgMatches<'_>) -> Result<Vec<PathBuf>> {
+pub fn query(matches: &ArgMatches<'_>) -> Result<()> {
     trace!("Handling query.");
 
     let engine = ReadDirEngine;
@@ -30,9 +30,17 @@ pub fn query(matches: &ArgMatches<'_>) -> Result<Vec<PathBuf>> {
     if abbr.is_empty() {
         trace!("Only starting dir provided, returning.");
 
-        Ok(vec![start_path])
+        print!("{}", start_path.display());
+
+        Ok(())
     } else {
-        search(start_path, &abbr, &engine)
+        let paths = search(start_path, &abbr, &engine)?;
+
+        let path = paths.get(0).ok_or(Error::NoPathFound)?;
+
+        print!("{}", path.display());
+
+        Ok(())
     }
 }
 
@@ -83,23 +91,17 @@ where
         }
 
         mem::swap(&mut findings, &mut current_level);
+        current_level.clear();
     }
 
-    if current_level.is_empty() {
-        Err(Error::NoPathFound)
-    } else {
-        // TODO: Return an object containing details about matches?
-        trace!("Found entries:");
+    let paths = get_ordered_paths(findings);
 
-        for entry in &current_level {
-            trace!("Path: `{}`.", entry.path.display());
-            trace!("Congruence: `{:?}`.", entry.congruence);
-        }
-
-        let paths = get_ordered_paths(current_level);
-
-        Ok(paths)
+    debug!("Findings:");
+    for path in &paths {
+        debug!("Found: `{}`.", path.display());
     }
+
+    Ok(paths)
 }
 
 fn get_ordered_paths(mut entries: Vec<Entry>) -> Vec<PathBuf> {

@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 /// `kn` error.
 #[derive(Debug, Error)]
 pub enum Error {
@@ -32,4 +34,7 @@ pub enum Error {
 
     #[error("Abbreviation contains wildcard at the last place.")]
     WildcardAtLastPlace,
+
+    #[error("")]
+    CtrlC,
 }
