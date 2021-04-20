@@ -23,6 +23,8 @@ use crate::{
     },
 };
 
+mod ui;
+
 pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
     let file = matches
         .value_of_os("TMP_FILE")

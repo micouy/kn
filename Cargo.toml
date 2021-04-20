@@ -27,6 +27,10 @@ keywords = ["cli", "utility", "filesystem"]
 name = "_kn"
 path = "src/main.rs"
 
+[[bin]]
+name = "kn-ui"
+path = "src/interactive/ui.rs"
+
 
 [dependencies]
 regex = "1.4"
@@ -38,6 +42,7 @@ tera = { version = "1", default-features = false }
 ansi_term = "0.12"
 strsim = "0.10"
 termion = "1.5"
+unicode-width = "*"
 
 
 [dev-dependencies]
