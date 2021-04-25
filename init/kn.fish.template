@@ -5,9 +5,18 @@ function kn
     set argc (count $argv)
 
     if test $argc -eq 0
-        # no args provided, go to home dir
+        # no args provided, search in interactive mode
         
-        cd $HOME
+        set --local __result_file (mktemp)
+
+        if _kn interactive $__result_file
+            read --local --null __path < $__result_file
+            cd "$__path"
+        else
+            return 1
+        end
+
+        rm -f $__result_file
     else if begin; test $argc -eq 1; and test "$argv[1]" = '-'; end
         # only dash provided, go to previous location
         

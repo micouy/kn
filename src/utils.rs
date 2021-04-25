@@ -34,4 +34,11 @@ macro_rules! dev_err {
             cause: $cause.to_string(),
         }
     };
+    () => {
+        Error::DevError {
+            line: line!(),
+            file: file!(),
+            cause: "".to_string(),
+        }
+    };
 }

@@ -9,8 +9,8 @@ use std::{
 use termion::{
     clear,
     cursor::{self, DetectCursorPos, Goto},
-    event::Key,
-    input::TermRead,
+    event::{Event, Key},
+    input::{TermRead, TermReadEventsAndRaw},
     raw::IntoRawMode,
 };
 
@@ -23,7 +23,17 @@ use crate::{
     },
 };
 
+mod search;
 mod ui;
+
+use search::Search;
+use ui::UI;
+
+// Helper constants.
+mod sequence {
+    pub const CTRL_J: [u8; 1] = [0xa];
+    pub const ENTER: [u8; 1] = [0xd];
+}
 
 pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
     let file = matches
@@ -32,51 +42,79 @@ pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode()?;
 
-    // Make room for input and results.
-    write!(stdout, "\n")?;
-    stdout.flush()?;
-
-    write!(stdout, "{}", cursor::Up(1))?;
-    stdout.flush()?;
-
     let mut search = Search::new(ReadDirEngine);
+    let mut ui = UI::new(&mut stdout, vec![], "".to_string(), vec![])?;
+    ui.display()?;
 
-    for c in stdin.keys() {
-        let results = match c? {
-            Key::Ctrl('c') => {
-                let current_line = stdout.cursor_pos()?.1;
-                write!(
-                    stdout,
-                    "{}{}",
-                    cursor::Goto(1, current_line),
-                    clear::AfterCursor,
-                )?;
-                stdout.flush()?;
+    for event_and_bytes in stdin.events_and_raw() {
+        let (event, bytes) = event_and_bytes?;
 
-                return Err(Error::CtrlC);
+        if let Event::Key(key) = event {
+            match key {
+                // `Ctrl + h` and `Ctrl + l`.
+                Key::Ctrl('h') => ui.previous_suggestion(),
+                Key::Ctrl('l') => ui.next_suggestion(),
+
+                // `Tab` and `Shift + Tab`.
+                Key::BackTab => ui.previous_suggestion(),
+                Key::Char('\t') => ui.next_suggestion(),
+
+                // `Ctrl + j` and `Ctrl + k`.
+                Key::Ctrl('k') => ui.previous_page(),
+                _ if bytes == sequence::CTRL_J => ui.next_page(),
+
+                // `Enter`.
+                _ if bytes == sequence::ENTER => {
+                    let found_path =
+                        search.get_path().ok_or(Error::NoPathFound)?;
+                    fs::write(file, &*found_path.to_string_lossy())?;
+
+                    ui.finalize()?;
+
+                    return Ok(());
+                }
+
+                // `Ctrl + c`.
+                Key::Ctrl('c') => {
+                    ui.finalize()?;
+
+                    return Err(Error::CtrlC);
+                }
+
+                // Any other char.
+                Key::Char(c) => {
+                    let (location, query, suggestions) = search.consume_char(c);
+                    let suggestions = suggestions
+                        .into_iter()
+                        .filter_map(|Entry { path, .. }| {
+                            path.file_name().map(|file_name| {
+                                file_name.to_string_lossy().to_string()
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    ui.update(location, query, suggestions)?;
+                    ui.display()?;
+                }
+
+                // `Backspace`.
+                Key::Backspace => {
+                    let (location, query, suggestions) = search.delete();
+                    let suggestions = suggestions
+                        .into_iter()
+                        .filter_map(|Entry { path, .. }| {
+                            path.file_name().map(|file_name| {
+                                file_name.to_string_lossy().to_string()
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    ui.update(location, query, suggestions)?;
+                    ui.display()?;
+                }
+
+                _ => {}
             }
-            Key::Char('\n') => {
-                let found_path = search.get_path().ok_or(Error::NoPathFound)?;
-                fs::write(file, &*found_path.to_string_lossy())?;
 
-                let current_line = stdout.cursor_pos()?.1;
-                write!(
-                    stdout,
-                    "{}{}",
-                    cursor::Goto(1, current_line),
-                    clear::AfterCursor,
-                )?;
-                stdout.flush()?;
-
-                return Ok(());
-            }
-            Key::Char(c) => Some(search.consume_char(c)),
-            Key::Backspace => Some(search.delete()),
-            _ => None,
-        };
-
-        if let Some((string, findings)) = results {
-            print_state(string, findings, &mut stdout)?;
+            ui.display()?;
         }
     }
 
@@ -123,199 +161,4 @@ fn print_state(
     stdout.flush()?;
 
     Ok(())
-}
-
-// TODO: Rename.
-// TODO: Make this code much more declarative.
-fn print_abbr(abbr: &[Finding], last: &str) -> String {
-    let start_ix = abbr.len().saturating_sub(4);
-    let end_ix = abbr.len();
-    let prefix = if start_ix == 0 {
-        ""
-    } else {
-        "…/"
-    }.to_string();
-    let abbr = abbr[start_ix..end_ix]
-        .iter()
-        .map(|Finding { abbr, .. }| match abbr {
-            Abbr::Literal(s) => s,
-            Abbr::Wildcard => "-",
-        })
-        .fold(String::new(), |abbr, component| abbr + component + "/");
-
-    prefix + &abbr + last
-}
-
-enum Prefix {
-    RootDir,
-    CurrentDir,
-    ParentDir,
-    HomeDir,
-}
-
-struct Finding {
-    abbr: Abbr,
-    entries: Vec<Entry>,
-}
-
-struct Search<E>
-where
-    E: SearchEngine,
-{
-    engine: E,
-    input: String,
-    findings: Vec<Finding>,
-    current_level: Vec<Entry>,
-}
-
-impl<E> Search<E>
-where
-    E: SearchEngine,
-{
-    fn new(engine: E) -> Self {
-        let current_level = engine
-            .read_dir(".")
-            .into_iter()
-            .map(|path| Entry::new(path, vec![]))
-            .collect();
-
-        Self {
-            input: String::new(),
-            findings: vec![],
-            current_level,
-            engine,
-        }
-    }
-
-    // NA RAZIE ZUPEŁNIE IGNOROWAĆ PREFIX ../.././ ITD
-    // ABBR powinno brać reference tylko
-    fn consume_char(&mut self, c: char) -> (String, Vec<Entry>) {
-        let findings = if c == '/' {
-            if !self.input.is_empty() {
-                // Perhaps repeating the search is unnecessary. It would
-                // be enough to cache the previous search and just push it to
-                // findings.
-                let input = mem::replace(&mut self.input, String::new());
-                let abbr = Abbr::from_string(input).unwrap();
-
-                // Get matching entries and order them.
-                let mut entries: Vec<_> = self
-                    .current_level
-                    .iter()
-                    .filter_map(|entry| match entry.advance(&abbr) {
-                        Flow::DeadEnd => None,
-                        Flow::Continue(entry) => Some(entry),
-                    })
-                    .collect();
-                entries.sort_by(|a, b| a.congruence.cmp(&b.congruence));
-
-                // Fill current level with children of the previous one.
-                self.current_level.clear();
-                let engine = &self.engine;
-                self.current_level.extend(
-                    entries
-                        .iter()
-                        .map(|Entry { path, congruence }| {
-                            engine.read_dir(path).into_iter().map(move |path| {
-                                Entry {
-                                    path,
-                                    congruence: congruence.clone(),
-                                }
-                            })
-                        })
-                        .flatten(),
-                );
-
-                self.findings.push(Finding { abbr, entries });
-            }
-
-            self.findings
-                .last()
-                .map(|Finding { entries, .. }| entries.clone())
-                .unwrap_or_else(|| vec![])
-        } else {
-            // Construct a new abbr.
-            self.input.push(c);
-            let abbr = Abbr::from_string(self.input.clone()).unwrap();
-
-            // Get matching entries and order them.
-            let mut entries: Vec<_> = self
-                .current_level
-                .iter()
-                .filter_map(|entry| match entry.advance(&abbr) {
-                    Flow::DeadEnd => None,
-                    Flow::Continue(entry) => Some(entry),
-                })
-                .collect();
-            entries.sort_by(|a, b| a.congruence.cmp(&b.congruence));
-
-            entries
-        };
-
-        let input = print_abbr(&self.findings, &self.input);
-
-        (input, findings)
-    }
-
-    fn get_path(&self) -> Option<PathBuf> {
-        let abbr = Abbr::from_string(self.input.clone()).unwrap();
-
-        // Get matching entries and order them.
-        let mut entries: Vec<_> = self
-            .current_level
-            .iter()
-            .filter_map(|entry| match entry.advance(&abbr) {
-                Flow::DeadEnd => None,
-                Flow::Continue(entry) => Some(entry),
-            })
-            .collect();
-        entries.sort_by(|a, b| a.congruence.cmp(&b.congruence));
-
-        if entries.get(0).is_some() {
-            Some(entries.remove(0).path)
-        } else {
-            None
-        }
-    }
-
-    fn delete(&mut self) -> (String, Vec<Entry>) {
-        if self.input.is_empty() {
-            let _ = self.findings.pop();
-            let _ = self.input.pop();
-
-            // Fill current level with children of the previous one.
-            let root_entry = vec![Entry::new(".".into(), vec![])];
-            let entries = self
-                .findings
-                .last()
-                .map(|Finding { entries, .. }| entries)
-                .unwrap_or(&root_entry);
-            self.current_level.clear();
-            let engine = &self.engine;
-            self.current_level.extend(
-                entries
-                    .iter()
-                    .map(|Entry { path, congruence }| {
-                        engine.read_dir(path).into_iter().map(move |path| {
-                            Entry {
-                                path,
-                                congruence: congruence.clone(),
-                            }
-                        })
-                    })
-                    .flatten(),
-            );
-        } else {
-            self.input.clear();
-        }
-
-        let input = print_abbr(&self.findings, &self.input);
-
-        (input, vec![])
-    }
-}
-
-pub enum SearchResults<'a> {
-    Findings(&'a [Entry]),
-    Suggestions(&'a [Entry]),
 }

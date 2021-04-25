@@ -1,20 +1,23 @@
 use std::{
-    io::{stdin, stdout, Result, Stdout, Write},
+    io::{stdin, stdout, Stdout, Write},
     mem,
+    ops::RangeBounds,
 };
 
 use termion::{
     clear,
     color,
     cursor::{self, DetectCursorPos},
-    input::TermRead,
+    event::{Event, Key},
+    input::{TermRead, TermReadEventsAndRaw},
     raw::{IntoRawMode, RawTerminal},
 };
 
 use unicode_width::*;
 
+use crate::error::{Error, Result};
+
 const SUGGESTIONS_SEPARATOR: &'static str = "  ";
-const PAGE_INFO_SPACE: usize = 9; // (nnn/NNN)
 
 // Palette:
 // https://coolors.co/9c71f3-47f0a7-cca6e8-8380b6-111d4a
@@ -33,27 +36,27 @@ in the proper position to start printing.
 */
 
 pub struct UI<'a> {
-    stdout: RawTerminal<Stdout>,
-    input: Input<'a>,
-    pages: Pages<'a>,
+    stdout: &'a mut RawTerminal<Stdout>,
+    input: Input,
+    pages: Option<Pages>,
 }
 
 impl<'a> UI<'a> {
     pub fn new(
-        location: &'a [String],
-        query: &'a str,
-        suggestions: &'a [String],
+        stdout: &'a mut RawTerminal<Stdout>,
+        location: Vec<String>,
+        query: String,
+        suggestions: Vec<String>,
     ) -> Result<Self> {
-        let mut stdout = stdout().into_raw_mode()?;
-
-        // Make room for input and results.
-        write!(stdout, "\n")?;
-        stdout.flush()?;
-        write!(stdout, "{}", cursor::Up(1))?;
-        stdout.flush()?;
         let (width, _) = termion::terminal_size()?;
 
-        let pages = Pages::new(suggestions, width as usize);
+        let pages = if suggestions.is_empty() {
+            None
+        } else {
+            let pages = Pages::new(suggestions, width as usize)?;
+
+            Some(pages)
+        };
         let input = Input::new(location, query);
 
         let ui = Self {
@@ -65,9 +68,41 @@ impl<'a> UI<'a> {
         Ok(ui)
     }
 
+    pub fn update(&mut self,
+        location: Vec<String>,
+        query: String,
+        suggestions: Vec<String>,
+    ) -> Result<()> {
+        let (width, _) = termion::terminal_size()?;
+
+        let pages = if suggestions.is_empty() {
+            None
+        } else {
+            let pages = Pages::new(suggestions, width as usize)?;
+
+            Some(pages)
+        };
+        let input = Input::new(location, query);
+
+        self.pages = pages;
+        self.input = input;
+
+        Ok(())
+    }
+
     pub fn display(&mut self) -> Result<()> {
         // Assuming cursor is at the original input line, not necessarily at the
         // first char.
+
+        // Make room for input and results.
+        write!(
+            self.stdout,
+            "{clear}\n{clear}{up}",
+            clear = clear::AfterCursor,
+            up = cursor::Up(1),
+        )?;
+        self.stdout.flush()?;
+
         let current_line = Cursor::get_line(&mut self.stdout)?;
         write!(
             self.stdout,
@@ -79,29 +114,41 @@ impl<'a> UI<'a> {
         self.input.display(&mut self.stdout)?;
         let cursor_pos = Cursor::save(&mut self.stdout)?;
         write!(self.stdout, "{}", cursor::Down(1))?;
-        self.pages.display(&mut self.stdout)?;
+
+        if let Some(ref mut pages) = self.pages {
+            pages.display(&mut self.stdout)?;
+        }
+
         cursor_pos.restore(&mut self.stdout)?;
 
         Ok(())
     }
 
     pub fn next_suggestion(&mut self) {
-        self.pages.next_suggestion();
+        if let Some(ref mut pages) = self.pages {
+            pages.next_suggestion();
+        }
     }
 
     pub fn previous_suggestion(&mut self) {
-        self.pages.previous_suggestion();
+        if let Some(ref mut pages) = self.pages {
+            pages.previous_suggestion();
+        }
     }
 
     pub fn next_page(&mut self) {
-        self.pages.next_page();
+        if let Some(ref mut pages) = self.pages {
+            pages.next_page();
+        }
     }
 
     pub fn previous_page(&mut self) {
-        self.pages.previous_page();
+        if let Some(ref mut pages) = self.pages {
+            pages.previous_page();
+        }
     }
 
-    pub fn finalize(self) -> Result<RawTerminal<Stdout>> {
+    pub fn finalize(self) -> Result<()> {
         let UI { mut stdout, .. } = self;
 
         let current_line = Cursor::get_line(&mut stdout)?;
@@ -113,7 +160,7 @@ impl<'a> UI<'a> {
         )?;
         stdout.flush()?;
 
-        Ok(stdout)
+        Ok(())
     }
 }
 
@@ -150,13 +197,13 @@ impl Cursor {
         Ok(line)
     }
 }
-struct Input<'a> {
-    query: &'a str,
-    location: &'a [String],
+struct Input {
+    query: String,
+    location: Vec<String>,
 }
 
-impl<'a> Input<'a> {
-    fn new(location: &'a [String], query: &'a str) -> Self {
+impl Input {
+    fn new(location: Vec<String>, query: String) -> Self {
         Self { location, query }
     }
 
@@ -164,7 +211,7 @@ impl<'a> Input<'a> {
     where
         W: Write,
     {
-        let location = Self::compose_location(self.location);
+        let location = Self::compose_location(&self.location);
         let current_line = Cursor::get_line(stdout)?;
 
         write!(
@@ -198,12 +245,6 @@ impl<'a> Input<'a> {
     }
 }
 
-#[derive(Copy, Clone)]
-struct Page {
-    start_ix: usize,
-    len: usize,
-}
-
 impl Page {
     fn display<W>(
         &self,
@@ -214,14 +255,198 @@ impl Page {
     where
         W: Write,
     {
-        let is_selected = |ix| selected_ix == (self.start_ix + ix);
+        Ok(())
+    }
+}
 
-        let output = suggestions
-            .get(self.start_ix..(self.start_ix + self.len))
-            .unwrap()
-            .iter()
-            .enumerate()
-            .fold(String::new(), |mut output, (ix, suggestion)| {
+// TODO: Handle the first suggestion separately.
+//   - No space at the beginning.
+//   - If the suggestion's length exceeds the available space, it must be
+//     formatted differently.
+
+#[derive(Copy, Clone)]
+struct Page {
+    start_ix: usize,
+}
+
+struct Pages {
+    pages: Vec<Page>,
+    suggestions: Vec<String>,
+    suggestion_ix: usize,
+    page_ix: usize,
+}
+
+impl Pages {
+    fn new(suggestions: Vec<String>, width: usize) -> Result<Self> {
+        if suggestions.is_empty() {
+            Err(dev_err!("empty pages"))
+        } else {
+            let pages = Self::build_pages(&suggestions, width);
+
+            let pages = Self {
+                pages,
+                suggestions,
+                suggestion_ix: 0,
+                page_ix: 0,
+            };
+
+            Ok(pages)
+        }
+    }
+
+    fn display<W>(&self, stdout: &mut W) -> Result<()>
+    where
+        W: Write,
+    {
+        let suggestions = Self::get_page_suggestions(
+            self.page_ix,
+            &self.pages,
+            &self.suggestions,
+        )?;
+        let page = self
+            .pages
+            .get(self.page_ix)
+            .ok_or(dev_err!("page out of bounds"))?;
+        let relative_ix = self
+            .suggestion_ix
+            .checked_sub(page.start_ix)
+            .ok_or(dev_err!())?;
+        let output = utils::compose_page(suggestions, relative_ix);
+        let current_line = Cursor::get_line(stdout)?;
+
+        write!(
+            stdout,
+            "{goto}{page_ix_fg}({page_ix}){reset_fg}{reset_bg}",
+            goto = cursor::Goto(1, current_line),
+            page_ix_fg = color::Fg(color::Rgb(71, 240, 167)),
+            page_ix = self.page_ix,
+            reset_fg = color::Fg(color::Reset),
+            reset_bg = color::Bg(color::Reset),
+        )?;
+
+        let suggestions_x =
+            1 + utils::page_ix_message_space(self.page_ix) as u16;
+        write!(
+            stdout,
+            "{}{}",
+            cursor::Goto(suggestions_x, current_line),
+            output
+        )?;
+
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn get_page_suggestions<'s>(
+        page_ix: usize,
+        pages: &[Page],
+        suggestions: &'s [String],
+    ) -> Result<&'s [String]> {
+        let Page { start_ix } =
+            pages.get(page_ix).ok_or(dev_err!("page out of bounds"))?;
+        let next_page_ix = page_ix + 1;
+
+        match pages.get(next_page_ix) {
+            Some(Page { start_ix: end_ix }) => suggestions
+                .get(*start_ix..*end_ix)
+                .ok_or(dev_err!("suggestion out of bounds")),
+            None => suggestions
+                .get(*start_ix..)
+                .ok_or(dev_err!("suggestion out of bounds")),
+        }
+    }
+
+    fn build_pages(suggestions: &[String], space: usize) -> Vec<Page> {
+        // TODO: Handle filenames exceeding terminal width;
+        if suggestions.is_empty() {
+            return vec![];
+        }
+
+        let mut page_width = 0;
+        let mut pages = vec![Page { start_ix: 0 }];
+        let mut page_space = space - utils::page_ix_message_space(pages.len());
+
+        for (i, suggestion) in suggestions.iter().enumerate() {
+            let delta_width =
+                SUGGESTIONS_SEPARATOR.width() + suggestion.width();
+            let new_width = page_width + delta_width;
+
+            if new_width > page_space {
+                pages.push(Page { start_ix: i });
+                page_width = delta_width;
+                page_space = space - utils::page_ix_message_space(pages.len());
+            } else {
+                page_width = new_width;
+            }
+        }
+
+        pages
+    }
+
+    fn next_suggestion(&mut self) -> usize {
+        let len = self.suggestions.len();
+        self.suggestion_ix = (self.suggestion_ix + 1) % len;
+        self.page_ix =
+            Self::find_selected_page(self.suggestion_ix, &self.pages);
+
+        self.suggestion_ix
+    }
+
+    fn previous_suggestion(&mut self) -> usize {
+        let len = self.suggestions.len();
+        self.suggestion_ix = (self.suggestion_ix + len - 1) % len;
+        self.page_ix =
+            Self::find_selected_page(self.suggestion_ix, &self.pages);
+
+        self.suggestion_ix
+    }
+
+    fn next_page(&mut self) -> usize {
+        self.page_ix = (self.page_ix + 1) % self.pages.len();
+        let page = self.pages.get(self.page_ix).unwrap();
+        self.suggestion_ix = page.start_ix;
+
+        self.suggestion_ix
+    }
+
+    fn previous_page(&mut self) -> usize {
+        let len = self.pages.len();
+        self.page_ix = (self.page_ix + len - 1) % len;
+        let page = self.pages.get(self.page_ix).unwrap();
+        self.suggestion_ix = page.start_ix;
+
+        self.suggestion_ix
+    }
+
+    fn find_selected_page(selected_ix: usize, pages: &[Page]) -> usize {
+        let is_selected = |pages: &[Page]| {
+            if let [page_a, page_b] = pages {
+                (page_a.start_ix..page_b.start_ix).contains(&selected_ix)
+            } else {
+                false
+            }
+        };
+
+        let last_page_ix = pages.len() - 1;
+
+        let selected_page = pages
+            .windows(2)
+            .position(is_selected)
+            .unwrap_or(last_page_ix);
+
+        selected_page
+    }
+}
+
+mod utils {
+    use super::*;
+
+    pub fn compose_page(suggestions: &[String], selected_ix: usize) -> String {
+        let is_selected = |ix| selected_ix == ix;
+
+        let page = suggestions.iter().enumerate().fold(
+            String::new(),
+            |mut output, (ix, suggestion)| {
                 if is_selected(ix) {
                     output += "  ";
                     output += &format!(
@@ -241,199 +466,33 @@ impl Page {
                 }
 
                 output
-            });
+            },
+        );
 
-        let current_line = Cursor::get_line(stdout)?;
-
-        /*
-        write!(
-            stdout,
-            "{goto}{page_info_fg}{page_info}{reset_fg}{reset_bg}",
-            goto = cursor::Goto(1, current_line),
-            page_info_fg = color::Fg(color::Rgb(71, 240, 167)),
-            page_info = page_info,
-            reset_fg = color::Fg(color::Reset),
-            reset_bg = color::Bg(color::Reset),
-        )?;
-        */
-
-        write!(stdout, "{}{}", cursor::Goto(1, current_line), output,)?;
-
-        stdout.flush()?;
-
-        Ok(())
-    }
-}
-
-// TODO: Handle the first suggestion separately.
-//   - No space at the beginning.
-//   - If the suggestion's length exceeds the available space, it must be
-//     formatted differently.
-
-struct Pages<'a> {
-    pages: Vec<Page>,
-    suggestions: &'a [String],
-    selection: Option<(usize, usize)>,
-}
-
-impl<'a> Pages<'a> {
-    fn new(suggestions: &'a [String], width: usize) -> Self {
-        let pages = Self::build_pages(suggestions, width);
-        let selection = if pages.is_empty() { None } else { Some((0, 0)) };
-
-        Self {
-            pages,
-            suggestions,
-            selection,
-        }
+        page
     }
 
-    fn display<W>(&self, stdout: &mut W) -> Result<()>
-    where
-        W: Write,
-    {
-        match self.selection {
-            Some((suggestion, page)) => {
-                if let Some(page) = self.pages.get(page) {
-                    page.display(suggestion, self.suggestions, stdout)?;
-                }
-            }
-            None => {
-                // No pages.
-            }
-        }
+    pub fn page_ix_message_space(ix: usize) -> usize {
+        // The length of message `(nnn)` is 2 plus length of `ix` in decimal
+        // notation.
 
-        Ok(())
-    }
+        let mut n_digits = 1;
+        let mut ten_to_power = 10;
 
-    fn build_pages(suggestions: &[String], space: usize) -> Vec<Page> {
-        if suggestions.is_empty() {
-            return vec![];
-        }
-
-        let mut page_width = 0;
-        let mut pages = vec![];
-        let mut start_ix = 0;
-        let mut is_empty = true;
-
-        for (i, suggestion) in suggestions.iter().enumerate() {
-            if is_empty {
-                start_ix = i;
-            }
-
-            let delta_width =
-                SUGGESTIONS_SEPARATOR.width() + suggestion.width();
-            let new_width = page_width + delta_width;
-
-            if new_width > space {
-                // TODO: Check if it's not off by one.
-                pages.push(Page {
-                    start_ix,
-                    len: i - start_ix,
-                });
-                page_width = delta_width;
-                start_ix = i;
-                is_empty = false;
+        loop {
+            if ix < ten_to_power {
+                return n_digits + 2;
             } else {
-                page_width = new_width;
-                is_empty = false;
-            }
-        }
-
-        if !is_empty {
-            // Zero length case covered at the top, so subtracting is safe.
-            // TODO: Check if it's not off by one.
-            pages.push(Page {
-                start_ix,
-                len: suggestions.len() - start_ix,
-            });
-        }
-
-        pages
-    }
-
-    fn next_suggestion(&mut self) {
-        // TODO: Cover cases when length is 0.
-        match self.selection {
-            None => {
-                // Selection should only be `None` if there are no pages.
-            }
-            Some((suggestion, _)) => {
-                let new_suggestion = (suggestion + 1) % self.suggestions.len();
-
-                let is_selected = |page: &Page| {
-                    (page.start_ix <= new_suggestion)
-                        && (new_suggestion < page.start_ix + page.len)
-                };
-
-                let new_selection = self
-                    .pages
-                    .iter()
-                    .position(|page| is_selected(page))
-                    .map(|new_page| (new_suggestion, new_page));
-
-                self.selection = new_selection;
-            }
-        }
-    }
-
-    fn previous_suggestion(&mut self) {
-        // TODO: Cover cases when length is 0.
-        match self.selection {
-            None => {
-                // Selection should only be `None` if there are no pages.
-            }
-            Some((suggestion, _)) =>
-                if self.suggestions.is_empty() {
-                    self.selection = None;
-                } else {
-                    let len = self.suggestions.len();
-                    let new_suggestion = (suggestion + len - 1) % len;
-
-                    let is_selected = |page: &Page| {
-                        (page.start_ix <= new_suggestion)
-                            && (new_suggestion < page.start_ix + page.len)
-                    };
-
-                    let new_selection = self
-                        .pages
-                        .iter()
-                        .position(|page| is_selected(page))
-                        .map(|new_page| (new_suggestion, new_page));
-
-                    self.selection = new_selection;
-                },
-        }
-    }
-
-    fn next_page(&mut self) {
-        if !self.pages.is_empty() {
-            if let Some((ref mut suggestion_ix, ref mut page_ix)) =
-                self.selection
-            {
-                *page_ix = (*page_ix + 1) % self.pages.len();
-                let page = self.pages.get(*page_ix).unwrap();
-                *suggestion_ix = page.start_ix;
-            }
-        }
-    }
-
-    fn previous_page(&mut self) {
-        if !self.pages.is_empty() {
-            if let Some((ref mut suggestion_ix, ref mut page_ix)) =
-                self.selection
-            {
-                let len = self.pages.len();
-                *page_ix = (*page_ix + len - 1) % len;
-                let page = self.pages.get(*page_ix).unwrap();
-                *suggestion_ix = page.start_ix;
+                n_digits += 1;
+                ten_to_power *= 10;
             }
         }
     }
 }
 
+/*
 fn main() -> Result<()> {
-    let cursor = vec![
+    let cursor: Vec<String> = vec![
         "mine".into(),
         "studia".into(),
         "analiza-danych-pomiarowych".into(),
@@ -467,27 +526,41 @@ fn main() -> Result<()> {
     .collect::<Vec<_>>();
 
     let mut ui = UI::new(&cursor, query, &suggestions)?;
-
     ui.display()?;
-    TermRead::read_line(&mut stdin()).unwrap();
 
-    ui.next_suggestion();
-    ui.display()?;
-    TermRead::read_line(&mut stdin()).unwrap();
+    for (event, bytes) in stdin().events_and_raw().map(|val| val.unwrap()) {
+        match event {
+            // `Ctrl + h` and `Ctrl + l`.
+            Event::Key(Key::Ctrl('h')) => ui.previous_suggestion(),
+            Event::Key(Key::Ctrl('l')) => ui.next_suggestion(),
 
-    ui.previous_suggestion();
-    ui.display()?;
-    TermRead::read_line(&mut stdin()).unwrap();
+            // `Tab` and `Shift + Tab`.
+            Event::Key(Key::BackTab) => ui.previous_suggestion(),
+            Event::Key(Key::Char('\t')) => ui.next_suggestion(),
 
-    ui.next_page();
-    ui.display()?;
-    TermRead::read_line(&mut stdin()).unwrap();
+            // `Ctrl + j` and `Ctrl + k`.
+            Event::Key(Key::Ctrl('k')) => ui.previous_page(),
+            Event::Key(_) if bytes == sequence::CTRL_J => ui.next_page(),
 
-    ui.previous_page();
-    ui.display()?;
-    TermRead::read_line(&mut stdin()).unwrap();
+            // `Enter`.
+            Event::Key(_) if bytes == sequence::ENTER => {
+                ui.finalize()?;
 
-    ui.finalize()?;
+                return Ok(());
+            }
+
+            // `Ctrl + c`.
+            Event::Key(Key::Ctrl('c')) => {
+                ui.finalize()?;
+
+                return Ok(());
+            }
+            _ => {},
+        }
+
+        ui.display()?;
+    }
 
     Ok(())
 }
+*/
