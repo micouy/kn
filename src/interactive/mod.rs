@@ -69,14 +69,14 @@ pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
                         search.get_path().ok_or(Error::NoPathFound)?;
                     fs::write(file, &*found_path.to_string_lossy())?;
 
-                    ui.finalize()?;
+                    ui.clear()?;
 
                     return Ok(());
                 }
 
                 // `Ctrl + c`.
                 Key::Ctrl('c') => {
-                    ui.finalize()?;
+                    ui.clear()?;
 
                     return Err(Error::CtrlC);
                 }
@@ -92,7 +92,8 @@ pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
                             })
                         })
                         .collect::<Vec<_>>();
-                    ui.update(location, query, suggestions)?;
+                    let stdout = ui.take();
+                    ui = UI::new(stdout, location, query, suggestions)?;
                     ui.display()?;
                 }
 
@@ -107,7 +108,8 @@ pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
                             })
                         })
                         .collect::<Vec<_>>();
-                    ui.update(location, query, suggestions)?;
+                    let stdout = ui.take();
+                    ui = UI::new(stdout, location, query, suggestions)?;
                     ui.display()?;
                 }
 
@@ -119,46 +121,4 @@ pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
     }
 
     Err(Error::NoPathFound)
-}
-
-fn print_state(
-    query: String,
-    findings: Vec<Entry>,
-    stdout: &mut Stdout,
-) -> Result<()> {
-    let current_line = stdout.cursor_pos()?.1;
-    write!(
-        stdout,
-        "{}{}{}",
-        clear::CurrentLine,
-        cursor::Goto(1, current_line),
-        query,
-    )?;
-
-    if let Some(finding) = findings.get(0) {
-        write!(stdout, "{}{}", cursor::Save, cursor::Down(1))?;
-        let current_line = stdout.cursor_pos()?.1;
-        write!(
-            stdout,
-            "{}{}{}{}",
-            cursor::Goto(1, current_line),
-            clear::CurrentLine,
-            finding.path.display(),
-            cursor::Restore,
-        )?;
-    } else {
-        write!(stdout, "{}{}", cursor::Save, cursor::Down(1))?;
-        let current_line = stdout.cursor_pos()?.1;
-        write!(
-            stdout,
-            "{}{}{}",
-            cursor::Goto(1, current_line),
-            clear::CurrentLine,
-            cursor::Restore,
-        )?;
-    }
-
-    stdout.flush()?;
-
-    Ok(())
 }

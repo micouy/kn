@@ -148,19 +148,21 @@ impl<'a> UI<'a> {
         }
     }
 
-    pub fn finalize(self) -> Result<()> {
-        let UI { mut stdout, .. } = self;
-
-        let current_line = Cursor::get_line(&mut stdout)?;
+    pub fn clear(&mut self) -> Result<()> {
+        let current_line = Cursor::get_line(self.stdout)?;
         write!(
-            stdout,
+            self.stdout,
             "{}{}",
             cursor::Goto(1, current_line),
             clear::AfterCursor,
         )?;
-        stdout.flush()?;
+        self.stdout.flush()?;
 
         Ok(())
+    }
+
+    pub fn take(self) -> &'a mut RawTerminal<Stdout> {
+        self.stdout
     }
 }
 
