@@ -31,10 +31,12 @@ use crate::{
     },
     utils::{self, as_path},
 };
+/*
+*/
 
 /*
 #[path = "../search/mod.rs"]
-mod search;
+pub mod search;
 use search::{
     abbr::{Abbr, Congruence},
     fs::{DefaultFileSystem, FileSystem},
@@ -43,12 +45,11 @@ use search::{
 };
 
 #[path = "../utils.rs"]
-#[macro_use]
-mod utils;
+#[macro_use] pub mod utils;
 use utils::as_path;
 
 #[path = "../error.rs"]
-mod error;
+pub mod error;
 use error::{Error, Result};
 */
 
@@ -99,8 +100,19 @@ impl Location {
         root
     }
 
-    fn pop(&mut self) -> bool {
-        self.suffix.pop().is_some()
+    fn get_suffix(&self) -> PathBuf {
+        self.suffix.iter().map(as_path).collect()
+    }
+
+    fn pop<F>(&mut self, file_system: &F) -> Result<bool> where F: FileSystem {
+        let did_pop = self.suffix.pop().is_some();
+        let new_location = iter::once(as_path(&self.root))
+            .chain(self.suffix.iter().map(as_path))
+            .collect::<PathBuf>();
+        let children = file_system.read_dir(new_location)?;
+        self.children = children;
+
+        Ok(did_pop)
     }
 
     fn push<P, F>(&mut self, new_component: P, file_system: &F) -> Result<()>
@@ -148,12 +160,14 @@ impl Filter {
             .iter()
             .enumerate()
             .filter_map(|(ix, path)| {
-                abbr.compare(&path.to_string_lossy())
-                    .map(|congruence| (ix, congruence))
+                let s = path.file_name()?.to_string_lossy();
+                abbr.compare(&s).map(|congruence| (ix, congruence))
             })
             .collect::<Vec<_>>();
-        results.sort_by(|(_, abbr_a), (_, abbr_b)| abbr_a.cmp(abbr_b));
+
+        results.sort_by(|(_, congruence_a), (_, congruence_b)| congruence_a.cmp(congruence_b));
         let ordering = results.into_iter().map(|(ix, _)| ix).collect();
+
 
         Filter { input, ordering }
     }
@@ -216,7 +230,6 @@ impl State {
     {
         if c == '/' {
             self.confirm_selection(file_system)?;
-            self.filter = None;
         } else {
             self.consume_char(c);
         }
@@ -247,13 +260,12 @@ impl State {
     where
         F: FileSystem,
     {
-        if let (Some(filter), Some(selection)) = (&self.filter, &self.selection)
+        if let Some(child_ix) = &self.selection
         {
-            let child_ix = filter.translate_index(*selection)?;
             let child = self
                 .location
                 .get_children()
-                .get(child_ix)
+                .get(*child_ix)
                 .ok_or(dev_err!("child out of bounds"))?;
             let file_name = child
                 .file_name()
@@ -261,6 +273,9 @@ impl State {
                 .to_owned();
             self.location.push(file_name, file_system)?;
         }
+
+        self.selection = None;
+        self.filter = None;
 
         Ok(())
     }
@@ -279,22 +294,23 @@ impl State {
         self.filter = Some(filter);
     }
 
-    fn handle_backspace(&mut self) -> UIState {
+    fn handle_backspace<F>(&mut self, file_system: &F) -> Result<UIState> where F: FileSystem {
         match self.filter {
             Some(_) => self.filter = None,
             None => {
-                let _ = self.location.pop();
+                let _ = self.location.pop(file_system)?;
             }
         }
 
         let ui_state = self.get_ui_state();
 
-        ui_state
+        Ok(ui_state)
     }
 
     fn get_ui_state(&self) -> UIState {
         let input = self.filter.as_ref().map(|filter| filter.input.clone());
-        let location = self.location.get_path();
+        let location = self.location.get_suffix();
+
         let suggestions = self
             .filter
             .as_ref()
@@ -326,7 +342,7 @@ impl State {
 pub fn interactive() -> Result<PathBuf> {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode()?;
-    let mut stdout = termion::screen::AlternateScreen::from(stdout);
+    // let mut stdout = termion::screen::AlternateScreen::from(stdout);
     let root = env::current_dir()?;
     let file_system = DefaultFileSystem;
 
@@ -383,7 +399,7 @@ pub fn interactive() -> Result<PathBuf> {
 
                 // `Backspace`.
                 Key::Backspace => {
-                    let ui_state = state.handle_backspace();
+                    let ui_state = state.handle_backspace(&file_system)?;
                     let stdout = ui.take();
                     let ui_and_selection = UI::new(stdout, ui_state)?;
                     ui = ui_and_selection.0;
@@ -410,5 +426,63 @@ fn main() {
     match interactive() {
         Err(err) => println!("{}", err),
         _ => {},
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_filter() {
+        {
+            let children: Vec<PathBuf> = vec![
+                "a",
+                "abc",
+                "smth_else",
+            ].iter().map(PathBuf::from).collect();
+
+            let a = &children[0];
+            let abc = &children[1];
+
+            let filter = Filter::new("a".to_string(), &children);
+            let ordered = filter.order_children(&children);
+
+            assert_eq!(ordered, vec![a, abc]);
+        }
+
+        {
+            let children: Vec<PathBuf> = vec![
+                "abc",
+                "a",
+                "smth_else",
+            ].iter().map(PathBuf::from).collect();
+
+            let a = &children[1];
+            let abc = &children[0];
+
+            let filter = Filter::new("a".to_string(), &children);
+            let ordered = filter.order_children(&children);
+
+            assert_eq!(ordered, vec![a, abc]);
+        }
+
+        {
+            let children: Vec<PathBuf> = vec![
+                "smth_else",
+                "abc",
+                "a",
+            ].iter().map(PathBuf::from).collect();
+
+            let a = &children[2];
+            let abc = &children[1];
+
+            let filter = Filter::new("a".to_string(), &children);
+            let ordered = filter.order_children(&children);
+
+            assert_eq!(ordered, vec![a, abc]);
+        }
     }
 }

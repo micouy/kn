@@ -45,6 +45,7 @@ ASSUMPTION 2: When`display()` is called, the program assumes that the cursor is
 in the proper position to start printing.
 */
 
+#[derive(Debug)]
 pub struct UIState {
     pub suggestions: Vec<String>, /* TODO: Possible problems with converting
                                    * OsString to String? */
@@ -52,6 +53,7 @@ pub struct UIState {
     pub location: PathBuf,
 }
 
+#[derive(Debug)]
 pub struct UI<'a, W> where W: Write {
     stdout: &'a mut W,
     input: Input,
@@ -189,6 +191,8 @@ impl Cursor {
         Ok(line)
     }
 }
+
+#[derive(Debug)]
 struct Input {
     location: PathBuf,
     query: Option<String>,
@@ -215,11 +219,12 @@ impl Input {
             location = location.display(),
         )?;
 
-        if location != as_path("/") {
+        if location != as_path("") {
             write!(stdout, "/")?;
         }
 
         if let Some(query) = &self.query {
+
             write!(
                 stdout,
                 "{query_fg}{query}",
@@ -244,11 +249,12 @@ impl Input {
 //   - If the suggestion's length exceeds the available space, it must be
 //     formatted differently.
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Page {
     start_ix: usize,
 }
 
+#[derive(Debug)]
 struct Pages {
     pages: Vec<Page>,
     suggestions: Vec<String>,
@@ -492,3 +498,32 @@ mod utils {
 }
 
 fn main() {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    struct MockStdout;
+
+    impl std::io::Write for MockStdout {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_navigation() {
+        let mut stdout = MockStdout;
+        let suggestions = vec!["aa".into(), "bb".into(), "cc".into(), "dd".into()];
+        let mut pages = Pages::new(suggestions, 15).unwrap();
+
+        assert_eq!(pages.next_suggestion(), 1);
+        assert_eq!(pages.next_suggestion(), 2);
+        assert_eq!(pages.next_page(), 3);
+        assert_eq!(pages.next_page(), 0);
+    }
+}

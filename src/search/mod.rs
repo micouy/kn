@@ -123,7 +123,7 @@ where
 mod test {
     use super::*;
 
-    use utils::as_path;
+    use crate::utils::as_path;
 
     #[test]
     fn test_search_full() {
@@ -144,7 +144,7 @@ mod test {
             Abbr::from_string("d".to_string()).unwrap(),
         ];
 
-        let found_path = search_full(".", abbrs.iter(), &file_system).unwrap();
+        let found_path = search_full(".", abbrs.iter(), &file_system).remove(0);
 
         assert_eq!(as_path("./ex/dee/dee"), found_path);
     }
