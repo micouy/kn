@@ -2,7 +2,7 @@ use crate::{Error, Result};
 
 use super::{
     abbr::{Abbr, Congruence},
-    search_engine::SearchEngine,
+    fs::FileSystem,
 };
 
 use std::{

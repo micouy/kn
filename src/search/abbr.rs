@@ -140,12 +140,12 @@ mod test {
 
         let abbr = |s: &str| Abbr::from_string(s.to_string()).unwrap();
 
-        variant!(abbr("-"), Abbr::Wildcard);
-        variant!(abbr("mOcKiNgBiRd"), Abbr::Literal(literal) if literal == "mockingbird");
-        variant!(abbr("X.ae.A-12"), Abbr::Literal(literal) if literal == "x.ae.a-12");
+        assert_variant!(abbr("-"), Abbr::Wildcard);
+        assert_variant!(abbr("mOcKiNgBiRd"), Abbr::Literal(literal) if literal == "mockingbird");
+        assert_variant!(abbr("X.ae.A-12"), Abbr::Literal(literal) if literal == "x.ae.a-12");
 
         assert!(
-            variant!(abbr("zażółć"), Abbr::Literal(literal) => literal == "zażółć")
+            assert_variant!(abbr("zażółć"), Abbr::Literal(literal) => literal == "zażółć")
         );
     }
 
@@ -153,31 +153,29 @@ mod test {
     fn test_wildcard_match() {
         let abbr = Abbr::Wildcard;
 
-        variant!(abbr.compare("iks"), Some(Wildcard));
-        variant!(abbr.compare("eh--ehe123"), Some(Wildcard));
+        assert_variant!(abbr.compare("iks"), Some(Wildcard));
+        assert_variant!(abbr.compare("eh--ehe123"), Some(Wildcard));
     }
 
     #[test]
     fn test_literal_match() {
         let abbr = Abbr::Literal("mi".to_string());
 
-        variant!(abbr.compare("mi"), Some(Complete));
-        variant!(abbr.compare("Mi"), Some(Complete));
-        variant!(abbr.compare("ooo..oo---mi-ooooo"), Some(Partial(_)));
-        variant!(abbr.compare("ooo..oo---mI-ooooo"), Some(Partial(_)));
-        variant!(abbr.compare("xxxxxx"), None);
+        assert_variant!(abbr.compare("mi"), Some(Complete));
+        assert_variant!(abbr.compare("Mi"), Some(Complete));
+        assert_variant!(abbr.compare("ooo..oo---mi-ooooo"), Some(Partial(_)));
+        assert_variant!(abbr.compare("ooo..oo---mI-ooooo"), Some(Partial(_)));
+        assert_variant!(abbr.compare("xxxxxx"), None);
     }
 
     #[test]
     fn test_subseries_match() {
         let abbr = Abbr::Literal("mi".to_string());
 
-        let dist_a =
-            variant!(abbr.compare("m-----i"), Some(Partial(dist_a)) => dist_a);
-        let dist_b =
-            variant!(abbr.compare("M--i"), Some(Partial(dist_b)) => dist_b);
+        let dist_a = assert_variant!(abbr.compare("m-----i"), Some(Partial(dist_a)) => dist_a);
+        let dist_b = assert_variant!(abbr.compare("M--i"), Some(Partial(dist_b)) => dist_b);
         assert!(dist_a > dist_b);
 
-        variant!(abbr.compare("im"), None);
+        assert_variant!(abbr.compare("im"), None);
     }
 }

@@ -22,7 +22,6 @@ license = "MIT"
 categories = ["command-line-utilities", "filesystem"]
 keywords = ["cli", "utility", "filesystem"]
 
-
 [[bin]]
 name = "_kn"
 path = "src/main.rs"
@@ -30,6 +29,10 @@ path = "src/main.rs"
 [[bin]]
 name = "kn-ui"
 path = "src/interactive/ui.rs"
+
+[[bin]]
+name = "kn-interactive"
+path = "src/interactive/mod.rs"
 
 
 [dependencies]

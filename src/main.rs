@@ -1,4 +1,6 @@
 #![allow(unused_parens)]
+#![allow(warnings)] // Temporary.
+#![feature(destructuring_assignment)]
 
 use std::process::exit;
 
@@ -6,14 +8,25 @@ use std::process::exit;
 mod utils;
 mod app;
 mod error;
+mod search;
+
 mod init;
-// TODO: Rename them i.e. find, query.
 mod interactive;
 mod query;
 
 pub use error::{Error, Result};
 
 fn main() {
+    match _main() {
+        Err(error) => {
+            eprintln!("{}", error);
+            exit(1);
+        }
+        Ok(()) => exit(0),
+    }
+}
+
+fn _main() -> Result<()> {
     pretty_env_logger::init();
 
     let matches = app::app().get_matches();
@@ -23,36 +36,39 @@ fn main() {
             Ok(script) => {
                 print!("{}", script);
 
-                exit(0);
+                Ok(())
             }
-            Err(error) => {
-                eprintln!("{}", error);
-
-                exit(1);
-            }
+            Err(error) => Err(error),
         }
     } else if let Some(ref matches) = matches.subcommand_matches("query") {
-        match query::query(matches) {
-            Err(error) => {
-                eprintln!("{}", error);
+        // TODO: Write the result to file?
+        let abbr = matches
+            .value_of_os("ABBR")
+            .ok_or(dev_err!("required `clap` arg absent"))?;
+        match query::query(abbr) {
+            Err(error) => Err(error),
+            Ok(path) => {
+                println!("{}", path.display());
 
-                exit(1);
+                Ok(())
             }
-            Ok(()) => exit(0),
         }
     } else if let Some(ref matches) = matches.subcommand_matches("interactive")
     {
-        match interactive::interactive(matches) {
-            Err(error) => {
-                eprintln!("{}", error);
+        let file = matches
+            .value_of_os("TMP_FILE")
+            .ok_or(dev_err!("required arg absent"))?;
 
-                exit(1);
+        match interactive::interactive() {
+            Err(error) => Err(error),
+            Ok(path) => {
+                // TODO: Write the result to file.
+                println!("{}", path.display());
+
+                Ok(())
             }
-            Ok(()) => exit(0),
         }
     } else {
-        eprintln!("{}", dev_err!("no subcommand invoked"));
-
-        exit(1);
+        Err(dev_err!("no subcommand invoked"))
     }
 }

@@ -1,9 +1,15 @@
+#![allow(warnings)]
+#![feature(destructuring_assignment)]
+
 use clap::ArgMatches;
 use std::{
+    env,
+    ffi::OsString,
     fs,
     io::{stdin, stdout, Stdout, Write},
+    iter,
     mem,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::exit,
 };
 use termion::{
@@ -16,18 +22,39 @@ use termion::{
 
 use crate::{
     error::{Error, Result},
-    query::{
+    search::{
+        self,
         abbr::{Abbr, Congruence},
-        entry::{Entry, Flow},
-        search_engine::{ReadDirEngine, SearchEngine},
+        fs::{DefaultFileSystem, FileSystem},
+        search_level,
+        Finding,
     },
+    utils::{self, as_path},
 };
 
+/*
+#[path = "../search/mod.rs"]
 mod search;
+use search::{
+    abbr::{Abbr, Congruence},
+    fs::{DefaultFileSystem, FileSystem},
+    search_level,
+    Finding,
+};
+
+#[path = "../utils.rs"]
+#[macro_use]
+mod utils;
+use utils::as_path;
+
+#[path = "../error.rs"]
+mod error;
+use error::{Error, Result};
+*/
+
 mod ui;
 
-use search::Search;
-use ui::UI;
+use ui::{UIState, UI};
 
 // Helper constants.
 mod sequence {
@@ -35,22 +62,285 @@ mod sequence {
     pub const ENTER: [u8; 1] = [0xd];
 }
 
-pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
-    let file = matches
-        .value_of_os("TMP_FILE")
-        .ok_or(dev_err!("required arg absent"))?;
+#[derive(Debug, Clone)]
+struct Location {
+    root: PathBuf,
+    suffix: Vec<OsString>,
+    children: Vec<PathBuf>,
+}
+
+impl Location {
+    fn new<F>(root: PathBuf, file_system: &F) -> Result<Self>
+    where
+        F: FileSystem,
+    {
+        let children = file_system.read_dir(&root)?;
+
+        let location = Self {
+            root,
+            suffix: vec![],
+            children,
+        };
+
+        Ok(location)
+    }
+
+    fn get_children(&self) -> &[PathBuf] {
+        &self.children
+    }
+
+    fn get_path(&self) -> PathBuf {
+        let mut root = self.root.clone();
+
+        for component in &self.suffix {
+            root.push(component);
+        }
+
+        root
+    }
+
+    fn pop(&mut self) -> bool {
+        self.suffix.pop().is_some()
+    }
+
+    fn push<P, F>(&mut self, new_component: P, file_system: &F) -> Result<()>
+    where
+        P: AsRef<Path>,
+        F: FileSystem,
+    {
+        let new_component = new_component.as_ref();
+        let mut components = new_component.components();
+        let first_yield = components.next();
+        let second_yield = components.next();
+
+        match (first_yield, second_yield) {
+            (_, Some(_)) =>
+                Err(dev_err!("attempt to push multiple components at once")),
+            (None, None) => Err(dev_err!("attempt to push empty component")),
+            (Some(component), None) => {
+                let new_location = iter::once(as_path(&self.root))
+                    .chain(self.suffix.iter().map(as_path))
+                    .chain(iter::once(as_path(&component)))
+                    .collect::<PathBuf>();
+                let children = file_system.read_dir(new_location)?;
+                self.children = children;
+                self.suffix.push(component.as_os_str().to_os_string());
+
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Filter {
+    /// User's input.
+    input: String,
+
+    /// Children indices corresponding to suggestion indices.
+    ordering: Vec<usize>,
+}
+
+impl Filter {
+    fn new(input: String, children: &[PathBuf]) -> Self {
+        let abbr = Abbr::from_string(input.clone()).unwrap(); // TODO
+        let mut results = children
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, path)| {
+                abbr.compare(&path.to_string_lossy())
+                    .map(|congruence| (ix, congruence))
+            })
+            .collect::<Vec<_>>();
+        results.sort_by(|(_, abbr_a), (_, abbr_b)| abbr_a.cmp(abbr_b));
+        let ordering = results.into_iter().map(|(ix, _)| ix).collect();
+
+        Filter { input, ordering }
+    }
+
+    fn order_children<'a>(&self, children: &'a [PathBuf]) -> Vec<&'a PathBuf> {
+        self.ordering
+            .iter()
+            .filter_map(|child_ix| children.get(*child_ix))
+            .collect()
+    }
+
+    fn translate_index<'a>(&self, suggestion_ix: usize) -> Result<usize> {
+        self.ordering
+            .get(suggestion_ix)
+            .copied()
+            .ok_or(dev_err!(("suggestion out of bounds", self.clone(), suggestion_ix)))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct State {
+    location: Location,
+    filter: Option<Filter>,
+    selection: Option<usize>,
+}
+
+impl State {
+    pub fn new<F>(root: PathBuf, file_system: &F) -> Result<Self>
+    where
+        F: FileSystem,
+    {
+        let location = Location::new(root, file_system)?;
+        let state = Self {
+            location,
+            filter: None,
+            selection: None,
+        };
+
+        Ok(state)
+    }
+
+    fn get_path(&self) -> Option<PathBuf> {
+        // TODO: Handle errors.
+        if let (Some(filter), Some(selection)) = (&self.filter, &self.selection)
+        {
+            let child_ix = filter.translate_index(*selection).ok()?;
+            let child = self.location.get_children().get(child_ix).cloned();
+
+            child
+        } else {
+            let path = self.location.get_path();
+
+            Some(path)
+        }
+    }
+
+    fn handle_input<F>(&mut self, c: char, file_system: &F) -> Result<UIState>
+    where
+        F: FileSystem,
+    {
+        if c == '/' {
+            self.confirm_selection(file_system)?;
+            self.filter = None;
+        } else {
+            self.consume_char(c);
+        }
+
+        let ui_state = self.get_ui_state();
+
+        Ok(ui_state)
+    }
+
+    fn select_suggestion(&mut self, suggestion_ix: usize) -> Result<()> {
+        if let Some(filter) = &self.filter {
+            let selection = filter.translate_index(suggestion_ix)?;
+            self.selection = Some(selection);
+
+            Ok(())
+        } else if (0..self.location.get_children().len())
+            .contains(&suggestion_ix)
+        {
+            self.selection = Some(suggestion_ix);
+
+            Ok(())
+        } else {
+            Err(dev_err!("suggestion out of bounds"))
+        }
+    }
+
+    fn confirm_selection<F>(&mut self, file_system: &F) -> Result<()>
+    where
+        F: FileSystem,
+    {
+        if let (Some(filter), Some(selection)) = (&self.filter, &self.selection)
+        {
+            let child_ix = filter.translate_index(*selection)?;
+            let child = self
+                .location
+                .get_children()
+                .get(child_ix)
+                .ok_or(dev_err!("child out of bounds"))?;
+            let file_name = child
+                .file_name()
+                .ok_or(dev_err!("no file name"))?
+                .to_owned();
+            self.location.push(file_name, file_system)?;
+        }
+
+        Ok(())
+    }
+
+    fn consume_char(&mut self, c: char) {
+        let new_input = if let Some(Filter { input, .. }) = self.filter.take() {
+            let mut new_input = input.clone();
+            new_input.push(c);
+
+            new_input
+        } else {
+            c.to_string()
+        };
+
+        let filter = Filter::new(new_input, &self.location.children);
+        self.filter = Some(filter);
+    }
+
+    fn handle_backspace(&mut self) -> UIState {
+        match self.filter {
+            Some(_) => self.filter = None,
+            None => {
+                let _ = self.location.pop();
+            }
+        }
+
+        let ui_state = self.get_ui_state();
+
+        ui_state
+    }
+
+    fn get_ui_state(&self) -> UIState {
+        let input = self.filter.as_ref().map(|filter| filter.input.clone());
+        let location = self.location.get_path();
+        let suggestions = self
+            .filter
+            .as_ref()
+            .map(|filter| {
+                filter
+                    .order_children(self.location.get_children())
+                    .iter()
+                    .filter_map(|child| child.file_name())
+                    .map(|file_name| file_name.to_string_lossy().into_owned())
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_else(|| {
+                self.location
+                    .get_children()
+                    .iter()
+                    .filter_map(|child| child.file_name())
+                    .map(|file_name| file_name.to_string_lossy().into_owned())
+                    .collect::<Vec<String>>()
+            });
+
+        UIState {
+            input,
+            location,
+            suggestions,
+        }
+    }
+}
+
+pub fn interactive() -> Result<PathBuf> {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode()?;
+    let mut stdout = termion::screen::AlternateScreen::from(stdout);
+    let root = env::current_dir()?;
+    let file_system = DefaultFileSystem;
 
-    let mut search = Search::new(ReadDirEngine);
-    let mut ui = UI::new(&mut stdout, vec![], "".to_string(), vec![])?;
+    let mut state = State::new(root, &file_system)?;
+    let ui_state = state.get_ui_state();
+    let (mut ui, selection) = UI::new(&mut stdout, ui_state)?;
+    ui.clear()?;
     ui.display()?;
 
     for event_and_bytes in stdin.events_and_raw() {
         let (event, bytes) = event_and_bytes?;
 
         if let Event::Key(key) = event {
-            match key {
+            let suggestion_ix = match key {
                 // `Ctrl + h` and `Ctrl + l`.
                 Key::Ctrl('h') => ui.previous_suggestion(),
                 Key::Ctrl('l') => ui.next_suggestion(),
@@ -66,12 +356,11 @@ pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
                 // `Enter`.
                 _ if bytes == sequence::ENTER => {
                     let found_path =
-                        search.get_path().ok_or(Error::NoPathFound)?;
-                    fs::write(file, &*found_path.to_string_lossy())?;
-
+                        state.get_path().ok_or(Error::NoPathFound)?;
                     ui.clear()?;
+                    drop(ui.take());
 
-                    return Ok(());
+                    return Ok(found_path.clone());
                 }
 
                 // `Ctrl + c`.
@@ -83,37 +372,31 @@ pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
 
                 // Any other char.
                 Key::Char(c) => {
-                    let (location, query, suggestions) = search.consume_char(c);
-                    let suggestions = suggestions
-                        .into_iter()
-                        .filter_map(|Entry { path, .. }| {
-                            path.file_name().map(|file_name| {
-                                file_name.to_string_lossy().to_string()
-                            })
-                        })
-                        .collect::<Vec<_>>();
+                    let ui_state = state.handle_input(c, &file_system)?;
                     let stdout = ui.take();
-                    ui = UI::new(stdout, location, query, suggestions)?;
-                    ui.display()?;
+                    let ui_and_selection = UI::new(stdout, ui_state)?;
+                    ui = ui_and_selection.0;
+                    let selection = ui_and_selection.1;
+
+                    selection
                 }
 
                 // `Backspace`.
                 Key::Backspace => {
-                    let (location, query, suggestions) = search.delete();
-                    let suggestions = suggestions
-                        .into_iter()
-                        .filter_map(|Entry { path, .. }| {
-                            path.file_name().map(|file_name| {
-                                file_name.to_string_lossy().to_string()
-                            })
-                        })
-                        .collect::<Vec<_>>();
+                    let ui_state = state.handle_backspace();
                     let stdout = ui.take();
-                    ui = UI::new(stdout, location, query, suggestions)?;
-                    ui.display()?;
+                    let ui_and_selection = UI::new(stdout, ui_state)?;
+                    ui = ui_and_selection.0;
+                    let selection = ui_and_selection.1;
+
+                    selection
                 }
 
-                _ => {}
+                _ => None,
+            };
+
+            if let Some(suggestion_ix) = suggestion_ix {
+                state.select_suggestion(suggestion_ix);
             }
 
             ui.display()?;
@@ -121,4 +404,11 @@ pub fn interactive(matches: &ArgMatches<'_>) -> Result<()> {
     }
 
     Err(Error::NoPathFound)
+}
+
+fn main() {
+    match interactive() {
+        Err(err) => println!("{}", err),
+        _ => {},
+    }
 }

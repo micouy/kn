@@ -1,21 +1,31 @@
 use std::{
-    io::{stdin, stdout, Stdout, Write},
-    mem,
-    ops::RangeBounds,
+    io::{Stdout, Write},
+    path::PathBuf,
 };
 
 use termion::{
     clear,
     color,
     cursor::{self, DetectCursorPos},
-    event::{Event, Key},
-    input::{TermRead, TermReadEventsAndRaw},
-    raw::{IntoRawMode, RawTerminal},
+    raw::RawTerminal,
 };
 
 use unicode_width::*;
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    utils::as_path,
+};
+
+/*
+#[path = "../error.rs"]
+mod error;
+use error::{Error, Result};
+
+#[path = "../utils.rs"]
+#[macro_use] mod _utils;
+use _utils::as_path;
+*/
 
 const SUGGESTIONS_SEPARATOR: &'static str = "  ";
 
@@ -35,29 +45,39 @@ ASSUMPTION 2: When`display()` is called, the program assumes that the cursor is
 in the proper position to start printing.
 */
 
-pub struct UI<'a> {
-    stdout: &'a mut RawTerminal<Stdout>,
+pub struct UIState {
+    pub suggestions: Vec<String>, /* TODO: Possible problems with converting
+                                   * OsString to String? */
+    pub input: Option<String>,
+    pub location: PathBuf,
+}
+
+pub struct UI<'a, W> where W: Write {
+    stdout: &'a mut W,
     input: Input,
     pages: Option<Pages>,
 }
 
-impl<'a> UI<'a> {
+impl<'a, W> UI<'a, W> where W: Write {
     pub fn new(
-        stdout: &'a mut RawTerminal<Stdout>,
-        location: Vec<String>,
-        query: String,
-        suggestions: Vec<String>,
-    ) -> Result<Self> {
+        stdout: &'a mut W,
+        UIState {
+            location,
+            input,
+            suggestions,
+        }: UIState,
+    ) -> Result<(Self, Option<usize>)> {
         let (width, _) = termion::terminal_size()?;
 
-        let pages = if suggestions.is_empty() {
-            None
-        } else {
+        let pages = if !suggestions.is_empty() {
             let pages = Pages::new(suggestions, width as usize)?;
 
             Some(pages)
+        } else {
+            None
         };
-        let input = Input::new(location, query);
+        let suggestion_ix = pages.as_ref().map(|pages| pages.suggestion_ix);
+        let input = Input::new(location, input);
 
         let ui = Self {
             stdout,
@@ -65,29 +85,7 @@ impl<'a> UI<'a> {
             pages,
         };
 
-        Ok(ui)
-    }
-
-    pub fn update(&mut self,
-        location: Vec<String>,
-        query: String,
-        suggestions: Vec<String>,
-    ) -> Result<()> {
-        let (width, _) = termion::terminal_size()?;
-
-        let pages = if suggestions.is_empty() {
-            None
-        } else {
-            let pages = Pages::new(suggestions, width as usize)?;
-
-            Some(pages)
-        };
-        let input = Input::new(location, query);
-
-        self.pages = pages;
-        self.input = input;
-
-        Ok(())
+        Ok((ui, suggestion_ix))
     }
 
     pub fn display(&mut self) -> Result<()> {
@@ -115,7 +113,7 @@ impl<'a> UI<'a> {
         let cursor_pos = Cursor::save(&mut self.stdout)?;
         write!(self.stdout, "{}", cursor::Down(1))?;
 
-        if let Some(ref mut pages) = self.pages {
+        if let Some(pages) = &self.pages {
             pages.display(&mut self.stdout)?;
         }
 
@@ -124,28 +122,20 @@ impl<'a> UI<'a> {
         Ok(())
     }
 
-    pub fn next_suggestion(&mut self) {
-        if let Some(ref mut pages) = self.pages {
-            pages.next_suggestion();
-        }
+    pub fn next_suggestion(&mut self) -> Option<usize> {
+        self.pages.as_mut().map(|pages| pages.next_suggestion())
     }
 
-    pub fn previous_suggestion(&mut self) {
-        if let Some(ref mut pages) = self.pages {
-            pages.previous_suggestion();
-        }
+    pub fn previous_suggestion(&mut self) -> Option<usize> {
+        self.pages.as_mut().map(|pages| pages.previous_suggestion())
     }
 
-    pub fn next_page(&mut self) {
-        if let Some(ref mut pages) = self.pages {
-            pages.next_page();
-        }
+    pub fn next_page(&mut self) -> Option<usize> {
+        self.pages.as_mut().map(|pages| pages.next_page())
     }
 
-    pub fn previous_page(&mut self) {
-        if let Some(ref mut pages) = self.pages {
-            pages.previous_page();
-        }
+    pub fn previous_page(&mut self) -> Option<usize> {
+        self.pages.as_mut().map(|pages| pages.previous_page())
     }
 
     pub fn clear(&mut self) -> Result<()> {
@@ -161,7 +151,7 @@ impl<'a> UI<'a> {
         Ok(())
     }
 
-    pub fn take(self) -> &'a mut RawTerminal<Stdout> {
+    pub fn take(self) -> &'a mut W {
         self.stdout
     }
 }
@@ -200,12 +190,12 @@ impl Cursor {
     }
 }
 struct Input {
-    query: String,
-    location: Vec<String>,
+    location: PathBuf,
+    query: Option<String>,
 }
 
 impl Input {
-    fn new(location: Vec<String>, query: String) -> Self {
+    fn new(location: PathBuf, query: Option<String>) -> Self {
         Self { location, query }
     }
 
@@ -213,50 +203,38 @@ impl Input {
     where
         W: Write,
     {
-        let location = Self::compose_location(&self.location);
+        let location = &self.location;
         let current_line = Cursor::get_line(stdout)?;
 
         write!(
             stdout,
-            "{clear}{goto}{location_fg}{location}{query_fg}{query}{reset_fg}{reset_bg}",
+            "{clear}{goto}{location_fg}{location}",
             clear = clear::CurrentLine,
             goto = cursor::Goto(1, current_line),
             location_fg = color::Fg(color::AnsiValue::grayscale(16)),
-            location = location,
-            query_fg = color::Fg(color::Rgb(156, 113, 243)),
-            query = self.query,
+            location = location.display(),
+        )?;
+
+        if location != as_path("/") {
+            write!(stdout, "/")?;
+        }
+
+        if let Some(query) = &self.query {
+            write!(
+                stdout,
+                "{query_fg}{query}",
+                query_fg = color::Fg(color::Rgb(156, 113, 243)),
+                query = query,
+            )?;
+        }
+        write!(
+            stdout,
+            "{reset_fg}{reset_bg}",
             reset_fg = color::Fg(color::Reset),
             reset_bg = color::Bg(color::Reset),
         )?;
         stdout.flush()?;
 
-        Ok(())
-    }
-
-    fn compose_location(location: &[String]) -> String {
-        let start_ix = location.len().saturating_sub(2);
-        let end_ix = location.len();
-        let prefix = if start_ix == 0 { "" } else { ".../" }.to_string();
-        let location = location[start_ix..end_ix]
-            .iter()
-            .fold(String::new(), |location, component| {
-                location + component + "/"
-            });
-
-        prefix + &location
-    }
-}
-
-impl Page {
-    fn display<W>(
-        &self,
-        selected_ix: usize,
-        suggestions: &[String],
-        stdout: &mut W,
-    ) -> Result<()>
-    where
-        W: Write,
-    {
         Ok(())
     }
 }
@@ -280,62 +258,61 @@ struct Pages {
 
 impl Pages {
     fn new(suggestions: Vec<String>, width: usize) -> Result<Self> {
-        if suggestions.is_empty() {
-            Err(dev_err!("empty pages"))
-        } else {
-            let pages = Self::build_pages(&suggestions, width);
+        let pages = Self::build_pages(&suggestions, width)?;
 
-            let pages = Self {
-                pages,
-                suggestions,
-                suggestion_ix: 0,
-                page_ix: 0,
-            };
+        let pages = Self {
+            pages,
+            suggestions,
+            page_ix: 0,
+            suggestion_ix: 0,
+        };
 
-            Ok(pages)
-        }
+        Ok(pages)
     }
 
     fn display<W>(&self, stdout: &mut W) -> Result<()>
     where
         W: Write,
     {
-        let suggestions = Self::get_page_suggestions(
-            self.page_ix,
-            &self.pages,
-            &self.suggestions,
-        )?;
-        let page = self
-            .pages
-            .get(self.page_ix)
-            .ok_or(dev_err!("page out of bounds"))?;
-        let relative_ix = self
-            .suggestion_ix
-            .checked_sub(page.start_ix)
-            .ok_or(dev_err!())?;
-        let output = utils::compose_page(suggestions, relative_ix);
-        let current_line = Cursor::get_line(stdout)?;
+        if !self.pages.is_empty() {
+            let suggestions = Self::get_page_suggestions(
+                self.page_ix,
+                &self.pages,
+                &self.suggestions,
+            )?;
+            let page = self
+                .pages
+                .get(self.page_ix)
+                .ok_or(dev_err!("page out of bounds"))?;
+            let relative_ix = self
+                .suggestion_ix
+                .checked_sub(page.start_ix)
+                .ok_or(dev_err!())?;
+            let output = utils::compose_page(suggestions, relative_ix);
+            let current_line = Cursor::get_line(stdout)?;
 
-        write!(
-            stdout,
-            "{goto}{page_ix_fg}({page_ix}){reset_fg}{reset_bg}",
-            goto = cursor::Goto(1, current_line),
-            page_ix_fg = color::Fg(color::Rgb(71, 240, 167)),
-            page_ix = self.page_ix,
-            reset_fg = color::Fg(color::Reset),
-            reset_bg = color::Bg(color::Reset),
-        )?;
+            write!(
+                stdout,
+                "{goto}{page_ix_fg}({page_ix}){reset_fg}{reset_bg}",
+                goto = cursor::Goto(1, current_line),
+                page_ix_fg = color::Fg(color::Rgb(71, 240, 167)),
+                page_ix = self.page_ix,
+                reset_fg = color::Fg(color::Reset),
+                reset_bg = color::Bg(color::Reset),
+            )?;
 
-        let suggestions_x =
-            1 + utils::page_ix_message_space(self.page_ix) as u16;
-        write!(
-            stdout,
-            "{}{}",
-            cursor::Goto(suggestions_x, current_line),
-            output
-        )?;
+            let suggestions_x =
+                1 + utils::page_ix_message_space(self.page_ix) as u16;
+            write!(
+                stdout,
+                "{}{}",
+                cursor::Goto(suggestions_x, current_line),
+                output
+            )?;
 
-        stdout.flush()?;
+            stdout.flush()?;
+        }
+
         Ok(())
     }
 
@@ -358,10 +335,10 @@ impl Pages {
         }
     }
 
-    fn build_pages(suggestions: &[String], space: usize) -> Vec<Page> {
+    fn build_pages(suggestions: &[String], space: usize) -> Result<Vec<Page>> {
         // TODO: Handle filenames exceeding terminal width;
         if suggestions.is_empty() {
-            return vec![];
+            return Err(dev_err!("empty suggestions"));
         }
 
         let mut page_width = 0;
@@ -382,40 +359,62 @@ impl Pages {
             }
         }
 
-        pages
+        Ok(pages)
+    }
+
+    fn selection_from_page(page_ix: usize, pages: &[Page]) -> (usize, usize) {
+        let len = pages.len();
+        let page_ix = page_ix % len;
+        let suggestion_ix = pages.get(page_ix).unwrap().start_ix;
+
+        (suggestion_ix, page_ix)
+    }
+
+    fn selection_from_suggestion(
+        suggestion_ix: usize,
+        suggestions: &[String],
+        pages: &[Page],
+    ) -> (usize, usize) {
+        let len = suggestions.len();
+        let suggestion_ix = suggestion_ix % len;
+
+        let page_ix = Self::find_selected_page(suggestion_ix, pages);
+
+        (suggestion_ix, page_ix)
     }
 
     fn next_suggestion(&mut self) -> usize {
-        let len = self.suggestions.len();
-        self.suggestion_ix = (self.suggestion_ix + 1) % len;
-        self.page_ix =
-            Self::find_selected_page(self.suggestion_ix, &self.pages);
+        (self.suggestion_ix, self.page_ix) = Self::selection_from_suggestion(
+            self.suggestion_ix + 1,
+            &self.suggestions,
+            &self.pages,
+        );
 
         self.suggestion_ix
     }
 
     fn previous_suggestion(&mut self) -> usize {
-        let len = self.suggestions.len();
-        self.suggestion_ix = (self.suggestion_ix + len - 1) % len;
-        self.page_ix =
-            Self::find_selected_page(self.suggestion_ix, &self.pages);
+        (self.suggestion_ix, self.page_ix) = Self::selection_from_suggestion(
+            self.suggestion_ix + self.suggestions.len() - 1,
+            &self.suggestions,
+            &self.pages,
+        );
 
         self.suggestion_ix
     }
 
     fn next_page(&mut self) -> usize {
-        self.page_ix = (self.page_ix + 1) % self.pages.len();
-        let page = self.pages.get(self.page_ix).unwrap();
-        self.suggestion_ix = page.start_ix;
+        (self.suggestion_ix, self.page_ix) =
+            Self::selection_from_page(self.page_ix + 1, &self.pages);
 
         self.suggestion_ix
     }
 
     fn previous_page(&mut self) -> usize {
-        let len = self.pages.len();
-        self.page_ix = (self.page_ix + len - 1) % len;
-        let page = self.pages.get(self.page_ix).unwrap();
-        self.suggestion_ix = page.start_ix;
+        (self.suggestion_ix, self.page_ix) = Self::selection_from_page(
+            self.page_ix + self.pages.len() - 1,
+            &self.pages,
+        );
 
         self.suggestion_ix
     }
@@ -492,77 +491,4 @@ mod utils {
     }
 }
 
-/*
-fn main() -> Result<()> {
-    let cursor: Vec<String> = vec![
-        "mine".into(),
-        "studia".into(),
-        "analiza-danych-pomiarowych".into(),
-    ];
-    let query = "cw";
-    let suggestions = vec![
-        "cw-asdfasdfasdfasdf-1",
-        "cw-asdfasdfasdfasdf-2",
-        "cw-asdfasdfasdfasdf-3",
-        "cw-asdfasdfasdfasdf-4",
-        "cw-asdfasdfasdfasdf-5",
-        "cw-asdfasdfasdfasdf-6",
-        "cw-asdfasdfasdfasdf-7",
-        "cw-asdfasdfasdfasdf-8",
-        "cw-asdfasdfasdfasdf-9",
-        "cw-asdfasdfasdfasdf-10",
-        "cw-asdfasdfasdfasdf-11",
-        "cw-asdfasdfasdfasdf-12",
-        "cw-asdfasdfasdfasdf-13",
-        "cw-asdfasdfasdfasdf-14",
-        "cw-asdfasdfasdfasdf-15",
-        "cw-asdfasdfasdfasdf-16",
-        "cw-asdfasdfasdfasdf-17",
-        "cw-asdfasdfasdfasdf-18",
-        "cw-asdfasdfasdfasdf-19",
-        "cw-asdfasdfasdfasdf-20",
-        "cw-asdfasdfasdfasdf-21",
-    ]
-    .into_iter()
-    .map(|s| s.to_string())
-    .collect::<Vec<_>>();
-
-    let mut ui = UI::new(&cursor, query, &suggestions)?;
-    ui.display()?;
-
-    for (event, bytes) in stdin().events_and_raw().map(|val| val.unwrap()) {
-        match event {
-            // `Ctrl + h` and `Ctrl + l`.
-            Event::Key(Key::Ctrl('h')) => ui.previous_suggestion(),
-            Event::Key(Key::Ctrl('l')) => ui.next_suggestion(),
-
-            // `Tab` and `Shift + Tab`.
-            Event::Key(Key::BackTab) => ui.previous_suggestion(),
-            Event::Key(Key::Char('\t')) => ui.next_suggestion(),
-
-            // `Ctrl + j` and `Ctrl + k`.
-            Event::Key(Key::Ctrl('k')) => ui.previous_page(),
-            Event::Key(_) if bytes == sequence::CTRL_J => ui.next_page(),
-
-            // `Enter`.
-            Event::Key(_) if bytes == sequence::ENTER => {
-                ui.finalize()?;
-
-                return Ok(());
-            }
-
-            // `Ctrl + c`.
-            Event::Key(Key::Ctrl('c')) => {
-                ui.finalize()?;
-
-                return Ok(());
-            }
-            _ => {},
-        }
-
-        ui.display()?;
-    }
-
-    Ok(())
-}
-*/
+fn main() {}

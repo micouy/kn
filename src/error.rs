@@ -7,11 +7,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// `kn` error.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Internal error at {file}:{line}. Cause:\n{cause}\nIf you see this, contact the dev.")]
+    #[error("Internal error at {file}:{line}. Cause:\n{cause:#?}\nIf you see this, contact the dev.")]
     DevError {
         line: u32,
         file: &'static str,
-        cause: String,
+        cause: Box<dyn std::fmt::Debug>,
     },
 
     #[error("Abbreviation `{0}` is invalid.")]
