@@ -3,7 +3,7 @@
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
-## `0.2.0-beta` - 2021-05-10
+## `0.2.0` - 2021-05-10
 
 ### Add
 - Add changelog.
