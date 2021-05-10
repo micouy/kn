@@ -1,7 +1,6 @@
 #![allow(warnings)]
 #![feature(destructuring_assignment)]
 
-use clap::ArgMatches;
 use std::{
     env,
     ffi::OsString,
@@ -12,6 +11,9 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
 };
+
+use alphanumeric_sort;
+use clap::ArgMatches;
 use termion::{
     clear,
     cursor::{self, DetectCursorPos, Goto},
@@ -19,7 +21,6 @@ use termion::{
     input::{TermRead, TermReadEventsAndRaw},
     raw::IntoRawMode,
 };
-use alphanumeric_sort;
 
 use crate::{
     error::{Error, Result},
@@ -32,27 +33,6 @@ use crate::{
     },
     utils::{self, as_path},
 };
-/*
- */
-
-/*
-#[path = "../search/mod.rs"]
-pub mod search;
-use search::{
-    abbr::{Abbr, Congruence},
-    fs::{DefaultFileSystem, FileSystem},
-    search_level,
-    Finding,
-};
-
-#[path = "../utils.rs"]
-#[macro_use] pub mod utils;
-use utils::as_path;
-
-#[path = "../error.rs"]
-pub mod error;
-use error::{Error, Result};
-*/
 
 mod ui;
 
@@ -92,7 +72,10 @@ impl Location {
     }
 
     fn prepare_children<P, F>(path: P, file_system: &F) -> Result<Vec<PathBuf>>
-    where P: AsRef<Path>, F: FileSystem {
+    where
+        P: AsRef<Path>,
+        F: FileSystem,
+    {
         let mut children = file_system.read_dir(path)?;
         alphanumeric_sort::sort_path_slice(&mut children);
 
@@ -145,7 +128,8 @@ impl Location {
                     .chain(self.suffix.iter().map(as_path))
                     .chain(iter::once(as_path(&component)))
                     .collect::<PathBuf>();
-                self.children = Self::prepare_children(new_location, file_system)?;
+                self.children =
+                    Self::prepare_children(new_location, file_system)?;
                 self.suffix.push(component.as_os_str().to_os_string());
 
                 Ok(())
@@ -252,7 +236,7 @@ impl State {
     where
         F: FileSystem,
     {
-        if c == '/' {
+        if c == '/' || c == '\\' {
             self.confirm_selection(file_system)?;
         } else {
             self.consume_char(c);
@@ -394,6 +378,11 @@ pub fn interactive() -> Result<PathBuf> {
     let mut state = State::new(root, &file_system)?;
     let ui_state = state.get_ui_state();
     let (mut ui, selection) = UI::new(&mut stdout, ui_state)?;
+
+    if let Some(suggestion_ix) = selection {
+        state.select_suggestion(suggestion_ix);
+    }
+
     ui.clear()?;
     ui.display()?;
 
@@ -431,8 +420,8 @@ pub fn interactive() -> Result<PathBuf> {
                     return Err(Error::CtrlC);
                 }
 
-                // Any other char.
-                Key::Char(c) => {
+                // Any other char, excluding whitespace.
+                Key::Char(c) if !c.is_whitespace() => {
                     let ui_state = state.handle_input(c, &file_system)?;
                     let stdout = ui.take();
                     let ui_and_selection = UI::new(stdout, ui_state)?;

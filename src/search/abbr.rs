@@ -1,9 +1,9 @@
-use crate::{Error, Result};
-
 use std::cmp::Ordering;
 
 use regex::Regex;
 use strsim::levenshtein as str_distance;
+
+use crate::{Error, Result};
 
 #[derive(Debug, Clone)]
 pub enum Abbr {

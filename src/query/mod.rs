@@ -1,23 +1,14 @@
+use std::{
+    ffi::OsStr,
+    path::{Component, Path, PathBuf},
+};
+
 use crate::{
-    search::{
-        self,
-        abbr::{Abbr, Congruence},
-        fs::{DefaultFileSystem, FileSystem},
-    },
+    search::{self, abbr::Abbr, fs::DefaultFileSystem},
     utils::as_path,
     Error,
     Result,
 };
-
-use std::{
-    collections::VecDeque,
-    ffi::OsStr,
-    mem,
-    path::{Component, Path, PathBuf},
-};
-
-use ansi_term::Colour::Red;
-use clap::ArgMatches;
 
 pub fn query(abbr: &OsStr) -> Result<PathBuf> {
     let file_system = DefaultFileSystem;

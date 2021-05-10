@@ -9,23 +9,12 @@ use termion::{
     cursor::{self, DetectCursorPos},
     raw::RawTerminal,
 };
-
 use unicode_width::*;
 
 use crate::{
     error::{Error, Result},
     utils::as_path,
 };
-
-/*
-#[path = "../error.rs"]
-mod error;
-use error::{Error, Result};
-
-#[path = "../utils.rs"]
-#[macro_use] mod _utils;
-use _utils::as_path;
-*/
 
 const SUGGESTIONS_SEPARATOR: &'static str = "  ";
 
@@ -47,8 +36,8 @@ in the proper position to start printing.
 
 #[derive(Debug)]
 pub struct UIState {
-    pub suggestions: Vec<String>, /* TODO: Possible problems with converting
-                                   * OsString to String? */
+    // TODO: Possible problems with converting OsString to String?
+    pub suggestions: Vec<String>,
     pub input: Option<String>,
     pub location: PathBuf,
 }
@@ -501,8 +490,6 @@ mod utils {
         }
     }
 }
-
-fn main() {}
 
 #[cfg(test)]
 mod test {

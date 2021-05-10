@@ -3,9 +3,14 @@
 
 function kn() {
     if [[ "$#" -eq 0 ]]; then
-        # no args provided, go to home dir
+        # no args provided, search in interactive mode
 
-        \builtin cd ~
+        \builtin local __result_file
+        __result_file="`mktemp`"
+
+        \builtin local __path
+
+        _kn interactive "$__result_file" && \builtin cd "`cat $__result_file`"
     elif [[ "$#" -eq 1 ]] && [[ "$1" = '-' ]]; then
         # only dash provided, go to previous location
 

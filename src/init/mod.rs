@@ -1,7 +1,6 @@
-#[allow(dead_code)]
-use crate::{Error, Result};
-
 use clap::ArgMatches;
+
+use crate::{Error, Result};
 
 pub fn init(matches: &ArgMatches<'_>) -> Result<String> {
     // Fail silently?

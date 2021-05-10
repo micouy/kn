@@ -1,13 +1,9 @@
 use std::{
     convert::AsRef,
-    env,
-    io::{stdin, stdout, Stdout, Write},
     iter,
     mem,
     path::{Path, PathBuf},
 };
-
-use crate::error::{Error, Result};
 
 pub mod abbr;
 pub mod fs;
@@ -186,5 +182,3 @@ mod test {
         assert_has_elem!(level_3, Finding { path, congruence: Partial(_) } if path == as_path("./a/bee/cee"));
     }
 }
-
-fn main() {}

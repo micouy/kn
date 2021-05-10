@@ -94,7 +94,7 @@ dependencies = [
 
 [[package]]
 name = "kn"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alphanumeric-sort",
  "ansi_term 0.12.1",
