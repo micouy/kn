@@ -14,9 +14,35 @@
 
 # Features
 
-<p align="center">
-<a href="https://asciinema.org/a/406626?speed=2"><img src="https://asciinema.org/a/406626.svg" alt="Demo" /></a>
-</p>
+## *Interactive mode!*
+
+**Enter interactive mode**
+```bash
+$ kn
+```
+
+**Filter suggestions by typing**
+
+![demo](assets/filter.gif)
+
+**Select with <kbd>Tab</kbd> and <kbd>Shift</kbd> + <kbd>Tab</kbd>**
+
+You can also use <kbd>Ctrl</kbd> + { <kbd>h</kbd> , <kbd>j</kbd> , <kbd>k</kbd> , <kbd>l</kbd> }.
+
+![demo](assets/select.gif)
+
+**Enter dir with <kbd>/</kbd>**
+
+![demo](assets/enter-dir.gif)
+
+<kbd>Backspace</kbd> removes the whole input. If the input is empty, it enters the parent dir (unless the search started at current dir).
+
+To change dir, press <kbd>Enter</kbd>. Note that `kn` enters currently selected dir, not the path displayed in gray. This may change in the future.
+
+
+## Normal mode
+
+You can use `kn` just like `cd`. The difference is that you can search with abbreviations instead of full dir names. For example, instead of `foo/bar` you can type `fo/ba`.
 
 ```
 .
@@ -27,25 +53,24 @@
 └── photosxxxxxxxxxxx2020
 ```
 
-
 ```bash
 $ kn foo/bar          # Use `kn` just like `cd`...
-$ kn fo/br            # ...or navigate with abbreviations!
+$ kn fo/br            # ...or navigate with abbreviations! No asterisks required.
 $ kn pho2021          # Type only the significant parts of the dir name. You can skip the middle part.
-$ kn -/bar            # Wildcards to skip a dir name altogether (./foo/bar/).
 ```
-
-The basic feature of `kn` is that it lets you type abbreviations instead of full dir names. Instead of `foo/bar` you can type `fo/ba`.
 
 You can also use wildcards `-` to avoid typing a dir name altogether i.e. kn `-/beta` to go to `alpha/beta`. **Note that `kn alph-/bet-` will not match `alhpa/beta`. In this case `-` functions as a literal character.**
 
-These also work:
+```bash
+$ kn -/bar            # Wildcards is used to skip a dir name altogether (changes dir to ./foo/bar/).
+```
+
+These work as usual:
 
 ```bash
 $ kn .           # Stay in current dir.
 $ kn ..          # Enter parent dir.
 $ kn /           # Enter root dir.
-$ kn             # Enter home dir.
 $ kn ~           # Also enter home dir.
 $ kn -           # Go to previous location.
 ```
@@ -139,7 +164,6 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 
 - Check the correctness of scripts in [init/](init/).
 - Add scripts and installation instructions for shells other than `fish`, `bash` and `zsh`.
-- Review regular expressions used in `Abbr::from_string` in `src/query/abbr.rs` to validate abbreviation's components. Are there other characters or sequences which should be prohibited?
 - Review Github Actions workflows in [.github/workflows/](.github/workflows/).
 
 
@@ -147,21 +171,13 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 
 ## Interactive mode
 
-- [x] Display 3 suggestions at most, preferably right below the prompt.
-- [x] Handle each component separately, not like `fzf` which matches whole paths.
-- [x] Make backspace remove whole component, like in `amp`.
-- [x] When displaying findings or the search string, trim it down to the last n components.
+- [ ] When displaying location, trim it down to the last n components.
 - [ ] Handle `..`, `/`, `.` and `~` in the prefix. Expand `~` to `$HOME`? [Difference between `$HOME` and tilde.](https://stackoverflow.com/questions/11587343/difference-between-home-and-tilde)
-- [ ] Fix tests.
-- [ ] Flash suggestions? Or show them scrolling horizontally (co to za zdanie brzydkie)? Or display the possible first chars? Or only the first 2-3 chars of each? I don't want to display all the options like the shell or `ls` does.
 
 
 ## Search engine
 
 - [ ] What to do about `.` and `..` components in the middle of path abbreviation? With `..` in paths the results would be too unpredictable. Are there any situations when `..` would show up in path? The user probably wouldn't type it but a command line tool could return such path.
-- [ ] Return objects containing details about the matches (the sequence of `Congruence`s with details about which chars have been matched). This will be useful in interactive mode.
-- [ ] Use inodes instead of traversing the directory structure using `read_dir()`. [Guide.](https://fasterthanli.me/series/reading-files-the-hard-way) Are there inodes on other OSes?
-- [ ] Read [Falsehoods programmers believe about paths](https://yakking.branchable.com/posts/falsehoods-programmers-believe-about-file-paths/).
 
 
 ## CLI experience
