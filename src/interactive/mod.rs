@@ -19,6 +19,7 @@ use termion::{
     input::{TermRead, TermReadEventsAndRaw},
     raw::IntoRawMode,
 };
+use alphanumeric_sort;
 
 use crate::{
     error::{Error, Result},
@@ -32,7 +33,7 @@ use crate::{
     utils::{self, as_path},
 };
 /*
-*/
+ */
 
 /*
 #[path = "../search/mod.rs"]
@@ -75,7 +76,7 @@ impl Location {
     where
         F: FileSystem,
     {
-        let children = file_system.read_dir(&root)?;
+        let children = Self::prepare_children(&root, file_system)?;
 
         let location = Self {
             root,
@@ -88,6 +89,14 @@ impl Location {
 
     fn get_children(&self) -> &[PathBuf] {
         &self.children
+    }
+
+    fn prepare_children<P, F>(path: P, file_system: &F) -> Result<Vec<PathBuf>>
+    where P: AsRef<Path>, F: FileSystem {
+        let mut children = file_system.read_dir(path)?;
+        alphanumeric_sort::sort_path_slice(&mut children);
+
+        Ok(children)
     }
 
     fn get_path(&self) -> PathBuf {
@@ -104,13 +113,15 @@ impl Location {
         self.suffix.iter().map(as_path).collect()
     }
 
-    fn pop<F>(&mut self, file_system: &F) -> Result<bool> where F: FileSystem {
+    fn pop<F>(&mut self, file_system: &F) -> Result<bool>
+    where
+        F: FileSystem,
+    {
         let did_pop = self.suffix.pop().is_some();
         let new_location = iter::once(as_path(&self.root))
             .chain(self.suffix.iter().map(as_path))
             .collect::<PathBuf>();
-        let children = file_system.read_dir(new_location)?;
-        self.children = children;
+        self.children = Self::prepare_children(new_location, file_system)?;
 
         Ok(did_pop)
     }
@@ -134,8 +145,7 @@ impl Location {
                     .chain(self.suffix.iter().map(as_path))
                     .chain(iter::once(as_path(&component)))
                     .collect::<PathBuf>();
-                let children = file_system.read_dir(new_location)?;
-                self.children = children;
+                self.children = Self::prepare_children(new_location, file_system)?;
                 self.suffix.push(component.as_os_str().to_os_string());
 
                 Ok(())
@@ -165,9 +175,10 @@ impl Filter {
             })
             .collect::<Vec<_>>();
 
-        results.sort_by(|(_, congruence_a), (_, congruence_b)| congruence_a.cmp(congruence_b));
+        results.sort_by(|(_, congruence_a), (_, congruence_b)| {
+            congruence_a.cmp(congruence_b)
+        });
         let ordering = results.into_iter().map(|(ix, _)| ix).collect();
-
 
         Filter { input, ordering }
     }
@@ -180,18 +191,29 @@ impl Filter {
     }
 
     fn translate_index<'a>(&self, suggestion_ix: usize) -> Result<usize> {
-        self.ordering
-            .get(suggestion_ix)
-            .copied()
-            .ok_or(dev_err!(("suggestion out of bounds", self.clone(), suggestion_ix)))
+        self.ordering.get(suggestion_ix).copied().ok_or(dev_err!((
+            "suggestion out of bounds",
+            self.clone(),
+            suggestion_ix
+        )))
     }
+}
+
+#[derive(Debug, Clone)]
+enum Suggestions {
+    All {
+        selection: Option<usize>,
+    },
+    Filtered {
+        filter: Filter,
+        selection: Option<usize>,
+    },
 }
 
 #[derive(Debug, Clone)]
 struct State {
     location: Location,
-    filter: Option<Filter>,
-    selection: Option<usize>,
+    suggestions: Suggestions,
 }
 
 impl State {
@@ -202,8 +224,7 @@ impl State {
         let location = Location::new(root, file_system)?;
         let state = Self {
             location,
-            filter: None,
-            selection: None,
+            suggestions: Suggestions::All { selection: None },
         };
 
         Ok(state)
@@ -211,10 +232,13 @@ impl State {
 
     fn get_path(&self) -> Option<PathBuf> {
         // TODO: Handle errors.
-        if let (Some(filter), Some(selection)) = (&self.filter, &self.selection)
-        {
-            let child_ix = filter.translate_index(*selection).ok()?;
-            let child = self.location.get_children().get(child_ix).cloned();
+        let child_ix = &match self.suggestions {
+            Suggestions::All { selection } => selection,
+            Suggestions::Filtered { selection, .. } => selection,
+        };
+
+        if let Some(child_ix) = child_ix {
+            let child = self.location.get_children().get(*child_ix).cloned();
 
             child
         } else {
@@ -240,19 +264,27 @@ impl State {
     }
 
     fn select_suggestion(&mut self, suggestion_ix: usize) -> Result<()> {
-        if let Some(filter) = &self.filter {
-            let selection = filter.translate_index(suggestion_ix)?;
-            self.selection = Some(selection);
+        match &mut self.suggestions {
+            Suggestions::All { ref mut selection } => {
+                let child_ix = suggestion_ix;
 
-            Ok(())
-        } else if (0..self.location.get_children().len())
-            .contains(&suggestion_ix)
-        {
-            self.selection = Some(suggestion_ix);
+                if (0..self.location.get_children().len()).contains(&child_ix) {
+                    *selection = Some(child_ix);
 
-            Ok(())
-        } else {
-            Err(dev_err!("suggestion out of bounds"))
+                    Ok(())
+                } else {
+                    Err(dev_err!("suggestion out of bounds"))
+                }
+            }
+            Suggestions::Filtered {
+                ref mut selection,
+                filter,
+            } => {
+                let child_ix = filter.translate_index(suggestion_ix)?;
+                *selection = Some(child_ix);
+
+                Ok(())
+            }
         }
     }
 
@@ -260,8 +292,11 @@ impl State {
     where
         F: FileSystem,
     {
-        if let Some(child_ix) = &self.selection
-        {
+        let child_ix = match &self.suggestions {
+            Suggestions::All { selection } => selection,
+            Suggestions::Filtered { selection, .. } => selection,
+        };
+        if let Some(child_ix) = child_ix {
             let child = self
                 .location
                 .get_children()
@@ -274,31 +309,42 @@ impl State {
             self.location.push(file_name, file_system)?;
         }
 
-        self.selection = None;
-        self.filter = None;
+        self.suggestions = Suggestions::All { selection: None };
 
         Ok(())
     }
 
     fn consume_char(&mut self, c: char) {
-        let new_input = if let Some(Filter { input, .. }) = self.filter.take() {
-            let mut new_input = input.clone();
-            new_input.push(c);
+        let new_input = match &self.suggestions {
+            Suggestions::All { .. } => c.to_string(),
+            Suggestions::Filtered {
+                filter: Filter { input, .. },
+                selection,
+            } => {
+                let mut new_input = input.clone();
+                new_input.push(c);
 
-            new_input
-        } else {
-            c.to_string()
+                new_input
+            }
         };
 
         let filter = Filter::new(new_input, &self.location.children);
-        self.filter = Some(filter);
+        self.suggestions = Suggestions::Filtered {
+            filter,
+            selection: None,
+        };
     }
 
-    fn handle_backspace<F>(&mut self, file_system: &F) -> Result<UIState> where F: FileSystem {
-        match self.filter {
-            Some(_) => self.filter = None,
-            None => {
+    fn handle_backspace<F>(&mut self, file_system: &F) -> Result<UIState>
+    where
+        F: FileSystem,
+    {
+        match &mut self.suggestions {
+            Suggestions::Filtered { .. } =>
+                self.suggestions = Suggestions::All { selection: None },
+            Suggestions::All { ref mut selection } => {
                 let _ = self.location.pop(file_system)?;
+                *selection = None;
             }
         }
 
@@ -308,28 +354,27 @@ impl State {
     }
 
     fn get_ui_state(&self) -> UIState {
-        let input = self.filter.as_ref().map(|filter| filter.input.clone());
+        let input = match &self.suggestions {
+            Suggestions::Filtered { filter, .. } => Some(filter.input.clone()),
+            _ => None,
+        };
         let location = self.location.get_suffix();
 
-        let suggestions = self
-            .filter
-            .as_ref()
-            .map(|filter| {
-                filter
-                    .order_children(self.location.get_children())
-                    .iter()
-                    .filter_map(|child| child.file_name())
-                    .map(|file_name| file_name.to_string_lossy().into_owned())
-                    .collect::<Vec<String>>()
-            })
-            .unwrap_or_else(|| {
-                self.location
-                    .get_children()
-                    .iter()
-                    .filter_map(|child| child.file_name())
-                    .map(|file_name| file_name.to_string_lossy().into_owned())
-                    .collect::<Vec<String>>()
-            });
+        let suggestions = match &self.suggestions {
+            Suggestions::All { .. } => self
+                .location
+                .get_children()
+                .iter()
+                .filter_map(|child| child.file_name())
+                .map(|file_name| file_name.to_string_lossy().into_owned())
+                .collect::<Vec<String>>(),
+            Suggestions::Filtered { filter, .. } => filter
+                .order_children(self.location.get_children())
+                .iter()
+                .filter_map(|child| child.file_name())
+                .map(|file_name| file_name.to_string_lossy().into_owned())
+                .collect::<Vec<String>>(),
+        };
 
         UIState {
             input,
@@ -425,7 +470,7 @@ pub fn interactive() -> Result<PathBuf> {
 fn main() {
     match interactive() {
         Err(err) => println!("{}", err),
-        _ => {},
+        _ => {}
     }
 }
 
@@ -438,11 +483,10 @@ mod test {
     #[test]
     fn test_filter() {
         {
-            let children: Vec<PathBuf> = vec![
-                "a",
-                "abc",
-                "smth_else",
-            ].iter().map(PathBuf::from).collect();
+            let children: Vec<PathBuf> = vec!["a", "abc", "smth_else"]
+                .iter()
+                .map(PathBuf::from)
+                .collect();
 
             let a = &children[0];
             let abc = &children[1];
@@ -454,11 +498,10 @@ mod test {
         }
 
         {
-            let children: Vec<PathBuf> = vec![
-                "abc",
-                "a",
-                "smth_else",
-            ].iter().map(PathBuf::from).collect();
+            let children: Vec<PathBuf> = vec!["abc", "a", "smth_else"]
+                .iter()
+                .map(PathBuf::from)
+                .collect();
 
             let a = &children[1];
             let abc = &children[0];
@@ -470,11 +513,10 @@ mod test {
         }
 
         {
-            let children: Vec<PathBuf> = vec![
-                "smth_else",
-                "abc",
-                "a",
-            ].iter().map(PathBuf::from).collect();
+            let children: Vec<PathBuf> = vec!["smth_else", "abc", "a"]
+                .iter()
+                .map(PathBuf::from)
+                .collect();
 
             let a = &children[2];
             let abc = &children[1];

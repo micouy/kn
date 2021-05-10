@@ -39,13 +39,11 @@ path = "src/interactive/mod.rs"
 regex = "1.4"
 clap = "2.33"
 thiserror = "1.0"
-pretty_env_logger = "0.4"
-log = { version = "0.4", features = ["release_max_level_off"] }
-tera = { version = "1", default-features = false }
 ansi_term = "0.12"
 strsim = "0.10"
 termion = "1.5"
 unicode-width = "*"
+alphanumeric-sort = "1.4"
 
 
 [dev-dependencies]

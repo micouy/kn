@@ -1,14 +1,11 @@
 //! Command line interface logic.
 
 use clap::{App, AppSettings, Arg, SubCommand};
-use log::trace;
 
 // TODO: Use consts instead of str literals.
 
 /// Creates [`clap::App`](clap::App).
 pub fn app() -> App<'static, 'static> {
-    trace!("Creating app.");
-
     App::new(env!("CARGO_BIN_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))

@@ -2,7 +2,7 @@
 #![allow(warnings)] // Temporary.
 #![feature(destructuring_assignment)]
 
-use std::process::exit;
+use std::{fs, process::exit};
 
 #[macro_use]
 mod utils;
@@ -27,8 +27,6 @@ fn main() {
 }
 
 fn _main() -> Result<()> {
-    pretty_env_logger::init();
-
     let matches = app::app().get_matches();
 
     if let Some(ref matches) = matches.subcommand_matches("init") {
@@ -59,15 +57,12 @@ fn _main() -> Result<()> {
             .value_of_os("TMP_FILE")
             .ok_or(dev_err!("required arg absent"))?;
 
-        match interactive::interactive() {
-            Err(error) => Err(error),
-            Ok(path) => {
-                // TODO: Write the result to file.
-                println!("{}", path.display());
+        let found_path = interactive::interactive()?;
+        let found_path =
+            found_path.to_str().ok_or(dev_err!("invalid Unicode"))?;
+        fs::write(file, found_path)?;
 
-                Ok(())
-            }
-        }
+        Ok(())
     } else {
         Err(dev_err!("no subcommand invoked"))
     }

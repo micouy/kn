@@ -54,13 +54,19 @@ pub struct UIState {
 }
 
 #[derive(Debug)]
-pub struct UI<'a, W> where W: Write {
+pub struct UI<'a, W>
+where
+    W: Write,
+{
     stdout: &'a mut W,
     input: Input,
     pages: Option<Pages>,
 }
 
-impl<'a, W> UI<'a, W> where W: Write {
+impl<'a, W> UI<'a, W>
+where
+    W: Write,
+{
     pub fn new(
         stdout: &'a mut W,
         UIState {
@@ -224,7 +230,6 @@ impl Input {
         }
 
         if let Some(query) = &self.query {
-
             write!(
                 stdout,
                 "{query_fg}{query}",
@@ -518,7 +523,8 @@ mod test {
     #[test]
     fn test_navigation() {
         let mut stdout = MockStdout;
-        let suggestions = vec!["aa".into(), "bb".into(), "cc".into(), "dd".into()];
+        let suggestions =
+            vec!["aa".into(), "bb".into(), "cc".into(), "dd".into()];
         let mut pages = Pages::new(suggestions, 15).unwrap();
 
         assert_eq!(pages.next_suggestion(), 1);

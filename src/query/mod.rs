@@ -18,19 +18,12 @@ use std::{
 
 use ansi_term::Colour::Red;
 use clap::ArgMatches;
-use log::{debug, info, trace};
 
 pub fn query(abbr: &OsStr) -> Result<PathBuf> {
-    trace!("Handling query.");
-
     let file_system = DefaultFileSystem;
     let (start_path, abbr) = parse_args(abbr)?;
 
-    trace!("Start path: `{}`.", start_path.display());
-
     if abbr.is_empty() {
-        trace!("Only starting dir provided, returning.");
-
         Ok(start_path)
     } else {
         let paths = search::search_full(start_path, abbr.iter(), &file_system);
@@ -41,8 +34,6 @@ pub fn query(abbr: &OsStr) -> Result<PathBuf> {
 }
 
 fn parse_args(abbr: &OsStr) -> Result<(PathBuf, Vec<Abbr>)> {
-    trace!("Parsing args.");
-
     if abbr.is_empty() {
         return Err(Error::EmptyAbbr);
     }
@@ -68,16 +59,12 @@ fn parse_args(abbr: &OsStr) -> Result<(PathBuf, Vec<Abbr>)> {
         return Err(Error::WildcardAtLastPlace);
     }
 
-    trace!("Abbreviation `{:?}`.", abbr);
-
     Ok((start_path, abbr))
 }
 
 fn extract_start_path<'p>(
     arg: &'p Path,
 ) -> (Option<PathBuf>, Vec<Component<'p>>) {
-    trace!("Extracting start path.");
-
     let mut suffix = arg.components().peekable();
     let mut prefix: Option<PathBuf> = None;
 
