@@ -1,5 +1,4 @@
 #![allow(unused_parens)]
-#![feature(destructuring_assignment)]
 
 use std::{fs, process::exit};
 

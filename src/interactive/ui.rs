@@ -384,37 +384,45 @@ impl Pages {
     }
 
     fn next_suggestion(&mut self) -> usize {
-        (self.suggestion_ix, self.page_ix) = Self::selection_from_suggestion(
+         let val = Self::selection_from_suggestion(
             self.suggestion_ix + 1,
             &self.suggestions,
             &self.pages,
         );
+        self.suggestion_ix = val.0;
+        self.page_ix = val.1;
 
         self.suggestion_ix
     }
 
     fn previous_suggestion(&mut self) -> usize {
-        (self.suggestion_ix, self.page_ix) = Self::selection_from_suggestion(
+        let val = Self::selection_from_suggestion(
             self.suggestion_ix + self.suggestions.len() - 1,
             &self.suggestions,
             &self.pages,
         );
+        self.suggestion_ix = val.0;
+        self.page_ix = val.1;
 
         self.suggestion_ix
     }
 
     fn next_page(&mut self) -> usize {
-        (self.suggestion_ix, self.page_ix) =
+        let val =
             Self::selection_from_page(self.page_ix + 1, &self.pages);
+        self.suggestion_ix = val.0;
+        self.page_ix = val.1;
 
         self.suggestion_ix
     }
 
     fn previous_page(&mut self) -> usize {
-        (self.suggestion_ix, self.page_ix) = Self::selection_from_page(
+        let val = Self::selection_from_page(
             self.page_ix + self.pages.len() - 1,
             &self.pages,
         );
+        self.suggestion_ix = val.0;
+        self.page_ix = val.1;
 
         self.suggestion_ix
     }
