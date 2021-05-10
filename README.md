@@ -27,7 +27,7 @@ $ kn
 
 **Select with <kbd>Tab</kbd> and <kbd>Shift</kbd> + <kbd>Tab</kbd>**
 
-You can also use <kbd>Ctrl</kbd> + { <kbd>h</kbd> , <kbd>j</kbd> , <kbd>k</kbd> , <kbd>l</kbd> }.
+You can also use <kbd>Ctrl</kbd> + <kbd>hjkl</kbd>.
 
 ![demo](assets/select.gif)
 
