@@ -175,11 +175,6 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 - [ ] Handle `..`, `/`, `.` and `~` in the prefix. Expand `~` to `$HOME`? [Difference between `$HOME` and tilde.](https://stackoverflow.com/questions/11587343/difference-between-home-and-tilde)
 
 
-## Search engine
-
-- [ ] What to do about `.` and `..` components in the middle of path abbreviation? With `..` in paths the results would be too unpredictable. Are there any situations when `..` would show up in path? The user probably wouldn't type it but a command line tool could return such path.
-
-
 ## CLI experience
 
 - [ ] Add `--help` to `kn` function.
