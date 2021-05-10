@@ -35,7 +35,7 @@ thiserror = "1.0"
 ansi_term = "0.12"
 strsim = "0.10"
 termion = "1.5"
-unicode-width = "*"
+unicode-width = "0.1"
 alphanumeric-sort = "1.4"
 
 
