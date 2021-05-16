@@ -29,9 +29,8 @@ path = "src/main.rs"
 
 
 [dependencies]
-clap = "2.33"
+pico-args = "0.4"
 thiserror = "1.0"
-ansi_term = "0.12"
 strsim = "0.10"
 termion = "1.5"
 unicode-width = "0.1"

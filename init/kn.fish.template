@@ -29,7 +29,7 @@ function kn
         set -l __kn_result (
             begin;
                 set -x RUST_LOG 0;
-                command _kn query -- $argv;
+                command _kn query $argv;
         end)
  
         and if test -d "$__kn_result"

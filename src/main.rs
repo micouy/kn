@@ -4,7 +4,8 @@ use std::{fs, process::exit};
 
 #[macro_use]
 mod utils;
-mod app;
+// mod app;
+mod args;
 mod error;
 mod search;
 
@@ -13,6 +14,8 @@ mod interactive;
 mod query;
 
 pub use error::{Error, Result};
+
+use args::{parse_args, Subcommand};
 
 fn main() {
     match _main() {
@@ -25,43 +28,30 @@ fn main() {
 }
 
 fn _main() -> Result<()> {
-    let matches = app::app().get_matches();
+    let subcommand = parse_args()?;
 
-    if let Some(ref matches) = matches.subcommand_matches("init") {
-        match init::init(matches) {
-            Ok(script) => {
-                print!("{}", script);
+    match subcommand {
+        Subcommand::Init { shell } => {
+            let script = init::init(shell);
+            print!("{}", script);
 
-                Ok(())
-            }
-            Err(error) => Err(error),
+            Ok(())
         }
-    } else if let Some(ref matches) = matches.subcommand_matches("query") {
-        // TODO: Write the result to file?
-        let abbr = matches
-            .value_of_os("ABBR")
-            .ok_or(dev_err!("required `clap` arg absent"))?;
-        match query::query(abbr) {
+        Subcommand::Query { abbr } => match query::query(abbr) {
             Err(error) => Err(error),
             Ok(path) => {
                 println!("{}", path.display());
 
                 Ok(())
             }
+        },
+        Subcommand::Interactive { tmpfile } => {
+            let found_path = interactive::interactive()?;
+            let found_path =
+                found_path.to_str().ok_or(dev_err!("invalid Unicode"))?;
+            fs::write(tmpfile, found_path)?;
+
+            Ok(())
         }
-    } else if let Some(ref matches) = matches.subcommand_matches("interactive")
-    {
-        let file = matches
-            .value_of_os("TMP_FILE")
-            .ok_or(dev_err!("required arg absent"))?;
-
-        let found_path = interactive::interactive()?;
-        let found_path =
-            found_path.to_str().ok_or(dev_err!("invalid Unicode"))?;
-        fs::write(file, found_path)?;
-
-        Ok(())
-    } else {
-        Err(dev_err!("no subcommand invoked"))
     }
 }

@@ -18,7 +18,13 @@ pub enum Error {
     InvalidAbbr(String),
 
     #[error("Value of arg `{0}` is invalid.")]
-    InvalidArgValue(String),
+    InvalidArg(String),
+
+    #[error("Arg `{0}` is missing.")]
+    MissingArg(String),
+
+    #[error(transparent)]
+    Args(#[from] pico_args::Error),
 
     #[error(transparent)]
     IO(#[from] std::io::Error),

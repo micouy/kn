@@ -13,7 +13,6 @@ use std::{
 };
 
 use alphanumeric_sort;
-use clap::ArgMatches;
 use termion::{
     clear,
     cursor::{self, DetectCursorPos, Goto},

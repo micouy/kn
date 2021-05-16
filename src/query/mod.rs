@@ -1,7 +1,4 @@
-use std::{
-    ffi::OsStr,
-    path::{Component, Path, PathBuf},
-};
+use std::path::{Component, Path, PathBuf};
 
 use crate::{
     search::{self, abbr::Abbr, fs::DefaultFileSystem},
@@ -10,7 +7,7 @@ use crate::{
     Result,
 };
 
-pub fn query(abbr: &OsStr) -> Result<PathBuf> {
+pub fn query(abbr: String) -> Result<PathBuf> {
     let file_system = DefaultFileSystem;
     let (start_path, abbr) = parse_args(abbr)?;
 
@@ -24,12 +21,12 @@ pub fn query(abbr: &OsStr) -> Result<PathBuf> {
     }
 }
 
-fn parse_args(abbr: &OsStr) -> Result<(PathBuf, Vec<Abbr>)> {
+fn parse_args(abbr: String) -> Result<(PathBuf, Vec<Abbr>)> {
     if abbr.is_empty() {
         return Err(Error::EmptyAbbr);
     }
 
-    let (start_path, suffix) = decompose_arg(as_path(abbr))?;
+    let (start_path, suffix) = decompose_arg(as_path(&abbr))?;
 
     let start_path = start_path
         .map(|path| Ok(path))

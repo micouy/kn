@@ -4,6 +4,8 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0
 
 ## Unreleased
 - Handle components with more than 2 dots in the prefix in normal mode.
+- Remove `regex` and `ansi_term` from deps.
+- Replace `clap` with `pico-args`.
 
 ## `0.2.1` - 2021-05-16
 

@@ -1,19 +1,9 @@
-use clap::ArgMatches;
+use crate::args::Shell;
 
-use crate::{Error, Result};
-
-pub fn init(matches: &ArgMatches<'_>) -> Result<String> {
-    // Fail silently?
-    let shell = matches
-        .value_of("shell")
-        .ok_or(dev_err!("required `clap` arg absent"))?;
-
-    let script = match shell {
-        "fish" => include_str!("../../init/kn.fish.template"),
-        "bash" => include_str!("../../init/kn.bash.template"),
-        "zsh" => include_str!("../../init/kn.zsh.template"),
-        _ => return Err(Error::InvalidArgValue("shell".to_string())),
-    };
-
-    Ok(script.to_string())
+pub fn init(shell: Shell) -> &'static str {
+    match shell {
+        Shell::Fish => include_str!("../../init/kn.fish.template"),
+        Shell::Zsh => include_str!("../../init/kn.zsh.template"),
+        Shell::Bash => include_str!("../../init/kn.bash.template"),
+    }
 }
