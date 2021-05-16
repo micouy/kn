@@ -8,7 +8,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0
 - Fix shell scripts so that they remove the tmpfile.
 
 
-## `0.2.0` - 2021-05-10
+## `0.2.0` - 2021-05-10 (yanked)
 
 ### Add
 - Add changelog.
