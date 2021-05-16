@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
 
-use regex::Regex;
 use strsim::levenshtein as str_distance;
 
 use crate::{Error, Result};
@@ -14,23 +13,17 @@ pub enum Abbr {
 impl Abbr {
     pub fn from_string(pattern: String) -> Result<Self> {
         // Invalid characters: /, \, any whitespace.
-        let invalid_re = Regex::new(r"[/\\\s]").unwrap();
-
-        let only_dots_re = Regex::new(r"^\.+$").unwrap();
+        let is_invalid = |s: &str| {
+            s.contains('/')
+                || s.contains('\\')
+                || s.contains(char::is_whitespace)
+        };
 
         if pattern == "-" {
             Ok(Self::Wildcard)
+        } else if is_invalid(&pattern) {
+            Err(Error::InvalidAbbr(pattern))
         } else {
-            if pattern.is_empty() {
-                return Err(Error::InvalidAbbr(pattern));
-            }
-            if invalid_re.is_match(&pattern) {
-                return Err(Error::InvalidAbbr(pattern));
-            }
-            if only_dots_re.is_match(&pattern) {
-                return Err(Error::InvalidAbbr(pattern));
-            }
-
             Ok(Self::Literal(pattern.to_ascii_lowercase()))
         }
     }
@@ -130,13 +123,11 @@ mod test {
 
         let abbr = |s: &str| Abbr::from_string(s.to_string());
 
-        assert!(abbr(".").is_err());
-        assert!(abbr("..").is_err());
-        assert!(abbr("...").is_err());
         assert!(abbr("one two three").is_err());
         assert!(abbr("du\tpa").is_err());
         assert!(abbr("\n").is_err());
         assert!(abbr(r"a\b").is_err());
+        assert!(abbr("a/b").is_err());
 
         let abbr = |s: &str| Abbr::from_string(s.to_string()).unwrap();
 

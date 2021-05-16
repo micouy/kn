@@ -54,46 +54,56 @@ fn parse_args(abbr: &OsStr) -> Result<(PathBuf, Vec<Abbr>)> {
 }
 
 fn maybe_parse_dots(component: &str) -> Option<u32> {
-    component.chars()
-    	.try_fold(0, |occurences, c| if c == '.' { Some(occurences + 1) } else { None })
-        .and_then(|occurences| if occurences >= 1 {
-            Some(occurences - 1)
-        } else {
-            None
+    component
+        .chars()
+        .try_fold(
+            0,
+            |occurences, c| if c == '.' { Some(occurences + 1) } else { None },
+        )
+        .and_then(|occurences| {
+            if occurences >= 1 {
+                Some(occurences - 1)
+            } else {
+                None
+            }
         })
 }
 
-fn decompose_arg<'a, P>(arg: &'a P) -> Result<(Option<PathBuf>, Vec<Component<'a>>)>
-where P: AsRef<Path> + ?Sized + 'a {
+fn decompose_arg<'a, P>(
+    arg: &'a P,
+) -> Result<(Option<PathBuf>, Vec<Component<'a>>)>
+where
+    P: AsRef<Path> + ?Sized + 'a,
+{
     use std::path::Component::*;
 
     let arg = arg.as_ref();
     let mut arg = arg.components().peekable();
     let mut prefix: Option<PathBuf> = None;
 
-    let mut push_to_prefix = |component| {
-        match prefix {
-            Some(ref mut prefix) => prefix.push(component),
-            None => {
-                prefix = Some(PathBuf::from(as_path(&component)));
-            }
+    let mut push_to_prefix = |component| match prefix {
+        Some(ref mut prefix) => prefix.push(component),
+        None => {
+            prefix = Some(PathBuf::from(as_path(&component)));
         }
     };
 
     while let Some(component) = arg.peek() {
         match component {
-            Prefix(_) | RootDir | CurDir | ParentDir => push_to_prefix(component.clone()),
+            Prefix(_) | RootDir | CurDir | ParentDir =>
+                push_to_prefix(component.clone()),
             Normal(component_os) => {
-                let component = component_os.to_str().ok_or(Error::InvalidUnicode)?;
+                let component =
+                    component_os.to_str().ok_or(Error::InvalidUnicode)?;
 
                 if let Some(n_dots) = maybe_parse_dots(component) {
                     for _ in 0..n_dots {
-                    	push_to_prefix(ParentDir);
+                        push_to_prefix(ParentDir);
                     }
                 } else {
                     break;
                 }
-            },
+            }
         }
 
         arg.next();
@@ -130,14 +140,16 @@ mod test {
         assert_eq!(first_abbr, "gn");
 
         // Multiple `..` and `.`.
-        let (start_path, suffix) = decompose_arg(as_path(".././../do")).unwrap();
+        let (start_path, suffix) =
+            decompose_arg(as_path(".././../do")).unwrap();
         let first_abbr = suffix[0].as_os_str();
 
         assert_eq!(start_path.unwrap(), as_path(".././.."));
         assert_eq!(first_abbr, "do");
 
         // Three or more dots.
-        let (start_path, suffix) = decompose_arg(as_path("./../.../..../oops")).unwrap();
+        let (start_path, suffix) =
+            decompose_arg(as_path("./../.../..../oops")).unwrap();
         let first_abbr = suffix[0].as_os_str();
 
         // . = 0
