@@ -29,8 +29,8 @@ pub enum Error {
     #[error("Abbreviation is empty.")]
     EmptyAbbr,
 
-    #[error("Arg contains invalid UTF-8.")]
-    ArgInvalidUnicode,
+    #[error("Invalid UTF-8 encountered.")]
+    InvalidUnicode,
 
     #[error("Abbreviation contains wildcard at the last place.")]
     WildcardAtLastPlace,
