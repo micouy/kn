@@ -103,7 +103,7 @@ $ kn ....             # Go to grand-grandparent dir (same as ../../..).
 $ kn ........         # Type as many dots as you want!
 $ kn .../....         # This works as well.
 
-$ kn .../..../abbr    # You can put abbreviationss after the prefix.
+$ kn .../..../abbr    # You can put abbreviations after the prefix.
 ```
 
 
