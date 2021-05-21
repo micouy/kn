@@ -9,7 +9,7 @@
 
 `kn` is an alternative to `cd`. It lets you navigate quickly by typing abbreviations. It doesn't track frecency or any other statistics.
 
-**WARNING**: This project is in its alpha stage.
+**NOTE**: This project is in an early stage. Issues and PRs are very much welcome.
 
 
 # Features
@@ -42,6 +42,8 @@ To change dir, press <kbd>Enter</kbd>. Note that `kn` enters currently selected 
 
 ## Normal mode
 
+### Abbreviations
+
 You can use `kn` just like `cd`. The difference is that you can search with abbreviations instead of full dir names. For example, instead of `foo/bar` you can type `fo/ba`.
 
 ```
@@ -59,21 +61,52 @@ $ kn fo/br            # ...or navigate with abbreviations! No asterisks required
 $ kn pho2021          # Type only the significant parts of the dir name. You can skip the middle part.
 ```
 
+### Wildcards
+
 You can also use wildcards `-` to avoid typing a dir name altogether i.e. kn `-/beta` to go to `alpha/beta`. **Note that `kn alph-/bet-` will not match `alhpa/beta`. In this case `-` functions as a literal character.**
 
 ```bash
 $ kn -/bar            # Wildcards is used to skip a dir name altogether (changes dir to ./foo/bar/).
 ```
 
-These work as usual:
+### Prefix
+
+If any of `.`, `..`, `/`, `~`, `-` occurs in the argument before normal components, it won't be interpreted as an abbreviation.
+
+So in these examples they work as usual:
+
+```
+$ kn .
+$ kn ./abbr
+$ kn ..
+$ kn ../..
+$ kn ../../abbr
+
+$ kn /
+$ kn /abbr
+
+$ kn ~
+$ kn ~/abbr
+
+$ kn -
+```
+
+### Multiple dots!
+
+In addition, you can use more than two dots in each component of the prefix:
 
 ```bash
-$ kn .           # Stay in current dir.
-$ kn ..          # Enter parent dir.
-$ kn /           # Enter root dir.
-$ kn ~           # Also enter home dir.
-$ kn -           # Go to previous location.
+$ kn ..               # Go to parent dir (as usual).
+$ kn ...              # Go to grandparent dir (same as ../..).
+$ kn ....             # Go to grand-grandparent dir (same as ../../..).
+
+$ kn ........         # Type as many dots as you want!
+$ kn .../....         # This works as well.
+
+$ kn .../..../abbr    # You can put abbreviationss after the prefix.
 ```
+
+
 
 <details>
 <summary>Details about the ordering of found paths</summary>
