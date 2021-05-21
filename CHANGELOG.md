@@ -3,7 +3,8 @@
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
-- Handle components with more than 2 dots in the prefix in normal mode.
+- Remove state synchronization between search and UI.
+- Handle components with more than 2 dots (`...` etc.) in the prefix in normal mode.
 - Remove `regex` and `ansi_term` from deps.
 - Replace `clap` with `pico-args`.
 
