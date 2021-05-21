@@ -1,13 +1,9 @@
-use std::{
-    io::{Stdout, Write},
-    path::PathBuf,
-};
+use std::{io::Write, path::PathBuf};
 
 use termion::{
     clear,
     color,
     cursor::{self, DetectCursorPos},
-    raw::RawTerminal,
 };
 use unicode_width::*;
 
@@ -16,31 +12,12 @@ use crate::{
     utils::as_path,
 };
 
-const SUGGESTIONS_SEPARATOR: &'static str = "  ";
+const SUGGESTIONS_SEPARATOR: &str = "  ";
 
 // Palette:
 // https://coolors.co/9c71f3-47f0a7-cca6e8-8380b6-111d4a
 
-/*
-ASSUMPTION 1: Width (the number of cells occupied) of these strings
-will not change (or at least not grow) depending on the
-renderer used and what characters surround them. This means
-the width of the displayed string is the sum of the widths of
-the substrings (or at least that it's not greater).
-*/
-
-/*
-ASSUMPTION 2: When`display()` is called, the program assumes that the cursor is
-in the proper position to start printing.
-*/
-
-#[derive(Debug)]
-pub struct UIState {
-    // TODO: Possible problems with converting OsString to String?
-    pub suggestions: Vec<String>,
-    pub input: Option<String>,
-    pub location: PathBuf,
-}
+// TODO: Handle file names with length exceeding the width of the terminal.
 
 #[derive(Debug)]
 pub struct UI<'a, W>
@@ -57,13 +34,11 @@ where
     W: Write,
 {
     pub fn new(
+        location: PathBuf,
+        input: Option<String>,
+        suggestions: Vec<PathBuf>,
         stdout: &'a mut W,
-        UIState {
-            location,
-            input,
-            suggestions,
-        }: UIState,
-    ) -> Result<(Self, Option<usize>)> {
+    ) -> Result<Self> {
         let (width, _) = termion::terminal_size()?;
 
         let pages = if !suggestions.is_empty() {
@@ -73,7 +48,6 @@ where
         } else {
             None
         };
-        let suggestion_ix = pages.as_ref().map(|pages| pages.suggestion_ix);
         let input = Input::new(location, input);
 
         let ui = Self {
@@ -82,7 +56,7 @@ where
             pages,
         };
 
-        Ok((ui, suggestion_ix))
+        Ok(ui)
     }
 
     pub fn display(&mut self) -> Result<()> {
@@ -98,13 +72,7 @@ where
         )?;
         self.stdout.flush()?;
 
-        let current_line = Cursor::get_line(&mut self.stdout)?;
-        write!(
-            self.stdout,
-            "{}{}",
-            cursor::Goto(1, current_line),
-            clear::AfterCursor
-        )?;
+        write!(self.stdout, "\r{}", clear::AfterCursor)?;
 
         self.input.display(&mut self.stdout)?;
         let cursor_pos = Cursor::save(&mut self.stdout)?;
@@ -119,30 +87,38 @@ where
         Ok(())
     }
 
-    pub fn next_suggestion(&mut self) -> Option<usize> {
-        self.pages.as_mut().map(|pages| pages.next_suggestion())
+    pub fn next_suggestion(&mut self) {
+        if let Some(ref mut pages) = &mut self.pages {
+            pages.next_suggestion();
+        }
     }
 
-    pub fn previous_suggestion(&mut self) -> Option<usize> {
-        self.pages.as_mut().map(|pages| pages.previous_suggestion())
+    pub fn previous_suggestion(&mut self) {
+        if let Some(ref mut pages) = &mut self.pages {
+            pages.previous_suggestion();
+        }
     }
 
-    pub fn next_page(&mut self) -> Option<usize> {
-        self.pages.as_mut().map(|pages| pages.next_page())
+    pub fn next_page(&mut self) {
+        if let Some(ref mut pages) = &mut self.pages {
+            pages.next_page();
+        }
     }
 
-    pub fn previous_page(&mut self) -> Option<usize> {
-        self.pages.as_mut().map(|pages| pages.previous_page())
+    pub fn previous_page(&mut self) {
+        if let Some(ref mut pages) = &mut self.pages {
+            pages.previous_page();
+        }
+    }
+
+    pub fn get_selected_suggestion(&self) -> Option<PathBuf> {
+        self.pages
+            .as_ref()
+            .and_then(|pages| pages.get_selected_suggestion())
     }
 
     pub fn clear(&mut self) -> Result<()> {
-        let current_line = Cursor::get_line(self.stdout)?;
-        write!(
-            self.stdout,
-            "{}{}",
-            cursor::Goto(1, current_line),
-            clear::AfterCursor,
-        )?;
+        write!(self.stdout, "\r{}", clear::AfterCursor,)?;
         self.stdout.flush()?;
 
         Ok(())
@@ -203,13 +179,11 @@ impl Input {
         W: Write,
     {
         let location = &self.location;
-        let current_line = Cursor::get_line(stdout)?;
 
         write!(
             stdout,
-            "{clear}{goto}{location_fg}{location}",
+            "\r{clear}{location_fg}{location}",
             clear = clear::CurrentLine,
-            goto = cursor::Goto(1, current_line),
             location_fg = color::Fg(color::AnsiValue::grayscale(16)),
             location = location.display(),
         )?;
@@ -238,10 +212,11 @@ impl Input {
     }
 }
 
-// TODO: Handle the first suggestion separately.
-//   - No space at the beginning.
-//   - If the suggestion's length exceeds the available space, it must be
-//     formatted differently.
+#[derive(Debug, Clone)]
+struct Suggestion {
+    path: PathBuf,
+    file_name: String,
+}
 
 #[derive(Copy, Clone, Debug)]
 struct Page {
@@ -251,13 +226,14 @@ struct Page {
 #[derive(Debug)]
 struct Pages {
     pages: Vec<Page>,
-    suggestions: Vec<String>,
+    suggestions: Vec<Suggestion>,
     suggestion_ix: usize,
     page_ix: usize,
 }
 
 impl Pages {
-    fn new(suggestions: Vec<String>, width: usize) -> Result<Self> {
+    fn new(suggestions: Vec<PathBuf>, width: usize) -> Result<Self> {
+        let suggestions = Self::prepare_suggestions(suggestions);
         let pages = Self::build_pages(&suggestions, width)?;
 
         let pages = Self {
@@ -316,11 +292,24 @@ impl Pages {
         Ok(())
     }
 
+    fn prepare_suggestions(suggestions: Vec<PathBuf>) -> Vec<Suggestion> {
+        suggestions
+            .into_iter()
+            .filter_map(|path| {
+                let file_name = path.file_name().map(|file_name| {
+                    file_name.to_os_string().to_string_lossy().to_string()
+                });
+
+                file_name.map(|file_name| Suggestion { path, file_name })
+            })
+            .collect()
+    }
+
     fn get_page_suggestions<'s>(
         page_ix: usize,
         pages: &[Page],
-        suggestions: &'s [String],
-    ) -> Result<&'s [String]> {
+        suggestions: &'s [Suggestion],
+    ) -> Result<&'s [Suggestion]> {
         let Page { start_ix } =
             pages.get(page_ix).ok_or(dev_err!("page out of bounds"))?;
         let next_page_ix = page_ix + 1;
@@ -335,8 +324,10 @@ impl Pages {
         }
     }
 
-    fn build_pages(suggestions: &[String], space: usize) -> Result<Vec<Page>> {
-        // TODO: Handle filenames exceeding terminal width;
+    fn build_pages(
+        suggestions: &[Suggestion],
+        space: usize,
+    ) -> Result<Vec<Page>> {
         if suggestions.is_empty() {
             return Err(dev_err!("empty suggestions"));
         }
@@ -345,9 +336,9 @@ impl Pages {
         let mut pages = vec![Page { start_ix: 0 }];
         let mut page_space = space - utils::page_ix_message_space(pages.len());
 
-        for (i, suggestion) in suggestions.iter().enumerate() {
-            let delta_width =
-                SUGGESTIONS_SEPARATOR.width() + suggestion.width();
+        for (i, Suggestion { file_name, .. }) in suggestions.iter().enumerate()
+        {
+            let delta_width = SUGGESTIONS_SEPARATOR.width() + file_name.width();
             let new_width = page_width + delta_width;
 
             if new_width > page_space {
@@ -372,7 +363,7 @@ impl Pages {
 
     fn selection_from_suggestion(
         suggestion_ix: usize,
-        suggestions: &[String],
+        suggestions: &[Suggestion],
         pages: &[Page],
     ) -> (usize, usize) {
         let len = suggestions.len();
@@ -383,7 +374,7 @@ impl Pages {
         (suggestion_ix, page_ix)
     }
 
-    fn next_suggestion(&mut self) -> usize {
+    fn next_suggestion(&mut self) {
         let val = Self::selection_from_suggestion(
             self.suggestion_ix + 1,
             &self.suggestions,
@@ -391,11 +382,9 @@ impl Pages {
         );
         self.suggestion_ix = val.0;
         self.page_ix = val.1;
-
-        self.suggestion_ix
     }
 
-    fn previous_suggestion(&mut self) -> usize {
+    fn previous_suggestion(&mut self) {
         let val = Self::selection_from_suggestion(
             self.suggestion_ix + self.suggestions.len() - 1,
             &self.suggestions,
@@ -403,27 +392,21 @@ impl Pages {
         );
         self.suggestion_ix = val.0;
         self.page_ix = val.1;
-
-        self.suggestion_ix
     }
 
-    fn next_page(&mut self) -> usize {
+    fn next_page(&mut self) {
         let val = Self::selection_from_page(self.page_ix + 1, &self.pages);
         self.suggestion_ix = val.0;
         self.page_ix = val.1;
-
-        self.suggestion_ix
     }
 
-    fn previous_page(&mut self) -> usize {
+    fn previous_page(&mut self) {
         let val = Self::selection_from_page(
             self.page_ix + self.pages.len() - 1,
             &self.pages,
         );
         self.suggestion_ix = val.0;
         self.page_ix = val.1;
-
-        self.suggestion_ix
     }
 
     fn find_selected_page(selected_ix: usize, pages: &[Page]) -> usize {
@@ -444,17 +427,26 @@ impl Pages {
 
         selected_page
     }
+
+    fn get_selected_suggestion(&self) -> Option<PathBuf> {
+        self.suggestions
+            .get(self.suggestion_ix)
+            .map(|Suggestion { path, .. }| path.clone())
+    }
 }
 
 mod utils {
     use super::*;
 
-    pub fn compose_page(suggestions: &[String], selected_ix: usize) -> String {
+    pub(super) fn compose_page(
+        suggestions: &[Suggestion],
+        selected_ix: usize,
+    ) -> String {
         let is_selected = |ix| selected_ix == ix;
 
         let page = suggestions.iter().enumerate().fold(
             String::new(),
-            |mut output, (ix, suggestion)| {
+            |mut output, (ix, Suggestion { file_name, .. })| {
                 if is_selected(ix) {
                     output += "  ";
                     output += &format!(
@@ -462,7 +454,7 @@ mod utils {
                         color::Fg(color::Black),
                         color::Bg(color::Rgb(156, 113, 243))
                     );
-                    output += suggestion;
+                    output += file_name;
                     output += &format!(
                         "{}{}",
                         color::Fg(color::Reset),
@@ -470,7 +462,7 @@ mod utils {
                     );
                 } else {
                     output += "  ";
-                    output += suggestion;
+                    output += file_name;
                 }
 
                 output
@@ -480,7 +472,7 @@ mod utils {
         page
     }
 
-    pub fn page_ix_message_space(ix: usize) -> usize {
+    pub(super) fn page_ix_message_space(ix: usize) -> usize {
         // The length of message `(nnn)` is 2 plus length of `ix` in decimal
         // notation.
 
@@ -516,14 +508,20 @@ mod test {
 
     #[test]
     fn test_navigation() {
-        let mut stdout = MockStdout;
         let suggestions =
             vec!["aa".into(), "bb".into(), "cc".into(), "dd".into()];
         let mut pages = Pages::new(suggestions, 15).unwrap();
 
-        assert_eq!(pages.next_suggestion(), 1);
-        assert_eq!(pages.next_suggestion(), 2);
-        assert_eq!(pages.next_page(), 3);
-        assert_eq!(pages.next_page(), 0);
+        pages.next_suggestion();
+        assert_eq!(pages.get_selected_suggestion().unwrap(), as_path("bb"));
+
+        pages.previous_suggestion();
+        assert_eq!(pages.get_selected_suggestion().unwrap(), as_path("aa"));
+
+        pages.next_page();
+        assert_eq!(pages.get_selected_suggestion().unwrap(), as_path("dd"));
+
+        pages.next_page();
+        assert_eq!(pages.get_selected_suggestion().unwrap(), as_path("aa"));
     }
 }

@@ -1,4 +1,5 @@
 #![allow(unused_parens)]
+#![allow(clippy::let_and_return)]
 
 use std::{fs, process::exit};
 

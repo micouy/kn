@@ -26,32 +26,6 @@ macro_rules! assert_variant {
     };
 }
 
-#[cfg(test)]
-macro_rules! assert_has_elem {
-    ($vec:expr , $( $pattern:pat )|+ $( if $guard: expr )?) => {{
-        let any = $vec.iter().any(|elem| match elem {
-            $( $pattern )|+ $( if $guard )? => { true },
-            _ => false,
-        });
-
-        if !any {
-            panic!("assertion failed");
-        }
-    }};
-
-    ($vec:expr , $( $pattern:pat )|+ $( if $guard: expr )? => $expression_out:expr) => {{
-        let mb_elem = $vec.iter().find_map(|elem| match elem {
-            $( $pattern )|+ $( if $guard )? => { Some($expression_out) },
-            _ => None,
-        });
-
-        match mb_elem {
-            Some(elem) => elem,
-            None => panic!("assertion failed"),
-        }
-    }};
-}
-
 macro_rules! dev_err {
     ($cause:expr) => {
         Error::DevError {

@@ -69,22 +69,6 @@ where
     findings
 }
 
-pub fn search_level<'a, I, P, F>(
-    previous_level: I,
-    abbr: &'a Abbr,
-    file_system: &'a F,
-) -> impl Iterator<Item = Finding> + 'a
-where
-    I: Iterator<Item = P> + 'a,
-    P: AsRef<Path> + 'a,
-    F: FileSystem + 'a,
-{
-    let children = get_children(previous_level, file_system);
-    let findings = filter_paths(children, abbr);
-
-    findings
-}
-
 pub fn get_children<'a, I, P, F>(
     paths: I,
     file_system: &'a F,
@@ -143,42 +127,5 @@ mod test {
         let found_path = search_full(".", abbrs.iter(), &file_system).remove(0);
 
         assert_eq!(as_path("./ex/dee/dee"), found_path);
-    }
-
-    #[test]
-    fn test_search_level() {
-        use abbr::Congruence::*;
-        use std::collections::HashMap;
-
-        let mut file_system: fs::MockFileSystem = HashMap::new();
-        file_system.insert(".".into(), vec!["./a".into()]);
-        file_system
-            .insert("./a".into(), vec!["./a/bee".into(), "./a/ex".into()]);
-        file_system.insert(
-            "./a/bee".into(),
-            vec!["./a/bee/cee".into(), "./a/bee/dee".into()],
-        );
-
-        let abbrs = vec![
-            Abbr::from_string("a".to_string()).unwrap(),
-            Abbr::from_string("-".to_string()).unwrap(),
-            Abbr::from_string("c".to_string()).unwrap(),
-        ];
-
-        let root = vec![as_path(".")];
-        let level_1 = search_level(root.iter(), &abbrs[0], &file_system)
-            .collect::<Vec<_>>();
-        assert_has_elem!(level_1, Finding { path, congruence: Complete } if path == as_path("./a"));
-        let paths_1 = level_1.iter().map(|finding| &finding.path);
-
-        let level_2 =
-            search_level(paths_1, &abbrs[1], &file_system).collect::<Vec<_>>();
-        assert_has_elem!(level_2, Finding { path, congruence: Wildcard } if path == as_path("./a/bee"));
-        assert_has_elem!(level_2, Finding { path, congruence: Wildcard } if path == as_path("./a/ex"));
-        let paths_2 = level_2.iter().map(|finding| &finding.path);
-
-        let level_3 =
-            search_level(paths_2, &abbrs[2], &file_system).collect::<Vec<_>>();
-        assert_has_elem!(level_3, Finding { path, congruence: Partial(_) } if path == as_path("./a/bee/cee"));
     }
 }

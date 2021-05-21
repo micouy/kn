@@ -18,10 +18,7 @@ pub enum Error {
     InvalidAbbr(String),
 
     #[error("Value of arg `{0}` is invalid.")]
-    InvalidArg(String),
-
-    #[error("Arg `{0}` is missing.")]
-    MissingArg(String),
+    InvalidArgumentValue(String),
 
     #[error(transparent)]
     Args(#[from] pico_args::Error),
@@ -32,14 +29,8 @@ pub enum Error {
     #[error("No path found.")]
     NoPathFound,
 
-    #[error("Abbreviation is empty.")]
-    EmptyAbbr,
-
     #[error("Invalid UTF-8 encountered.")]
     InvalidUnicode,
-
-    #[error("Abbreviation contains wildcard at the last place.")]
-    WildcardAtLastPlace,
 
     #[error("")]
     CtrlC,

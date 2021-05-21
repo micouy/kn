@@ -57,7 +57,10 @@ impl FileSystem for MockFileSystem {
         self.get(dir.as_ref()).cloned().ok_or_else(|| {
             std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                "no such file in mock filesystem",
+                format!(
+                    "file {} not found in mock filesystem",
+                    dir.as_ref().display()
+                ),
             )
             .into()
         })

@@ -23,6 +23,8 @@ impl Abbr {
             Ok(Self::Wildcard)
         } else if is_invalid(&pattern) {
             Err(Error::InvalidAbbr(pattern))
+        } else if pattern.is_empty() {
+            Err(Error::InvalidAbbr(pattern))
         } else {
             Ok(Self::Literal(pattern.to_ascii_lowercase()))
         }
@@ -112,15 +114,6 @@ mod test {
 
     #[test]
     fn test_from_string() {
-        // TODO: Check if `..` is needed as a path component in some
-        // important case. One such case might be the user wants
-        // to follow a link and then enter the parent directory:
-        //
-        // a/b -> x/y/b
-        // `cd a/b/..` changes directory to `x/y/` (?).
-        //
-        // Ultimately `kn` should be at least as good as `cd`.
-
         let abbr = |s: &str| Abbr::from_string(s.to_string());
 
         assert!(abbr("one two three").is_err());
@@ -134,10 +127,7 @@ mod test {
         assert_variant!(abbr("-"), Abbr::Wildcard);
         assert_variant!(abbr("mOcKiNgBiRd"), Abbr::Literal(literal) if literal == "mockingbird");
         assert_variant!(abbr("X.ae.A-12"), Abbr::Literal(literal) if literal == "x.ae.a-12");
-
-        assert!(
-            assert_variant!(abbr("zażółć"), Abbr::Literal(literal) => literal == "zażółć")
-        );
+        assert_variant!(abbr("zażółć"), Abbr::Literal(literal) if literal == "zażółć")
     }
 
     #[test]

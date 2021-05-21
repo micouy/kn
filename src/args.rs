@@ -16,15 +16,15 @@ pub enum Shell {
     Bash,
 }
 
-const SUBCOMMAND_ARG: &'static str = "subcommand";
-const SHELL_ARG: &'static str = "shell";
+const SUBCOMMAND_ARG: &str = "subcommand";
+const SHELL_ARG: &str = "shell";
 
 pub fn parse_args() -> Result<Subcommand> {
     let mut pargs = pico_args::Arguments::from_env();
 
     let subcommand = pargs
         .subcommand()?
-        .ok_or(Error::MissingArg(SUBCOMMAND_ARG.to_string()))?;
+        .ok_or(pico_args::Error::MissingArgument)?;
 
     match subcommand.as_str() {
         "init" => {
@@ -34,7 +34,7 @@ pub fn parse_args() -> Result<Subcommand> {
                 "fish" => Shell::Fish,
                 "zsh" => Shell::Zsh,
                 "bash" => Shell::Bash,
-                _ => return Err(Error::InvalidArg(SHELL_ARG.to_string())),
+                _ => return Err(Error::InvalidArgumentValue(SHELL_ARG.to_string())),
             };
 
             Ok(Subcommand::Init { shell })
@@ -51,6 +51,6 @@ pub fn parse_args() -> Result<Subcommand> {
 
             Ok(Subcommand::Interactive { tmpfile })
         }
-        _ => Err(Error::InvalidArg(SUBCOMMAND_ARG.to_string())),
+        _ => Err(Error::InvalidArgumentValue(SUBCOMMAND_ARG.to_string())),
     }
 }

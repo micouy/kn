@@ -23,14 +23,15 @@ pub fn query(abbr: String) -> Result<PathBuf> {
 
 fn parse_args(abbr: String) -> Result<(PathBuf, Vec<Abbr>)> {
     if abbr.is_empty() {
-        return Err(Error::EmptyAbbr);
+        return Err(Error::InvalidAbbr(abbr));
     }
 
     let (start_path, suffix) = decompose_arg(as_path(&abbr))?;
 
-    let start_path = start_path
-        .map(|path| Ok(path))
-        .unwrap_or_else(|| std::env::current_dir())?;
+    let start_path = match start_path {
+        Some(path) => path,
+        None => std::env::current_dir()?,
+    };
 
     let abbr = suffix
         .into_iter()
@@ -42,10 +43,6 @@ fn parse_args(abbr: String) -> Result<(PathBuf, Vec<Abbr>)> {
                 .and_then(|s| Abbr::from_string(s.to_string()))
         })
         .collect::<Result<Vec<Abbr>>>()?;
-
-    if let Some(Abbr::Wildcard) = abbr.last() {
-        return Err(Error::WildcardAtLastPlace);
-    }
 
     Ok((start_path, abbr))
 }
@@ -88,7 +85,7 @@ where
     while let Some(component) = arg.peek() {
         match component {
             Prefix(_) | RootDir | CurDir | ParentDir =>
-                push_to_prefix(component.clone()),
+                push_to_prefix(*component),
             Normal(component_os) => {
                 let component =
                     component_os.to_str().ok_or(Error::InvalidUnicode)?;
@@ -115,8 +112,6 @@ where
 mod test {
     use super::*;
     use crate::utils::as_path;
-
-    use std::collections::HashMap;
 
     use pretty_assertions::assert_eq;
 
@@ -149,11 +144,11 @@ mod test {
             decompose_arg(as_path("./../.../..../oops")).unwrap();
         let first_abbr = suffix[0].as_os_str();
 
-        // . = 0
-        // .. = 1
-        // ... = 2
-        // .... = 3
-        // total of 6
+        // .               = 0
+        // ..              = 1
+        // ...  = ../..    = 2
+        // .... = ../../.. = 3
+        //          total of 6
         assert_eq!(start_path.unwrap(), as_path("./../../../../../../"));
         assert_eq!(first_abbr, "oops");
     }
