@@ -288,7 +288,7 @@ mod test {
             let abc = &children[1];
 
             let mut filter = Filter::new();
-            filter.push('a');
+            filter.push('a').unwrap();
             let filtered = filter.filter(&children);
 
             assert_eq!(filtered, vec![a, abc]);
@@ -304,7 +304,7 @@ mod test {
             let abc = &children[0];
 
             let mut filter = Filter::new();
-            filter.push('a');
+            filter.push('a').unwrap();
             let filtered = filter.filter(&children);
 
             assert_eq!(filtered, vec![a, abc]);
@@ -320,7 +320,7 @@ mod test {
             let abc = &children[1];
 
             let mut filter = Filter::new();
-            filter.push('a');
+            filter.push('a').unwrap();
             let filtered = filter.filter(&children);
 
             assert_eq!(filtered, vec![a, abc]);
