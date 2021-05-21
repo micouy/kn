@@ -2,11 +2,18 @@
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## Unreleased
-- Remove state synchronization between search and UI.
+## `0.2.2` - 2021-05-21
+
+### Add
 - Handle components with more than 2 dots (`...` etc.) in the prefix in normal mode.
-- Remove `regex` and `ansi_term` from deps.
+
+### Change
+- Remove state synchronization between search and UI.
 - Replace `clap` with `pico-args`.
+
+### Remove
+- Remove `regex` and `ansi_term` from deps.
+
 
 ## `0.2.1` - 2021-05-16
 
