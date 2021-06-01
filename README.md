@@ -151,6 +151,16 @@ Download a binary of the [latest release](https://github.com/micouy/kn/releases/
 
 If there are any problems with the pre-compiled binaries, file an issue.
 
+**OR (Arch-based Linux only)**
+
+Install `kn` from [ArchLinux User Repository](https://aur.archlinux.org/packages/kn/) using Your favourite `aur` helper:
+
+```bash
+yay -S kn
+```
+
+**Note:** remember to configure your shell anyway!
+
 ## Configuring your shell
 
 Then add this line to the config of your shell (notice the underscore in `_kn`):
