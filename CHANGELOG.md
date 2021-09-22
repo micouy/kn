@@ -2,6 +2,14 @@
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+
+## `0.3` - Unreleased
+
+### Change
+- Simplify `Congruence`.
+- Compare abbreviations and strings using [Powierża distance](https://github.com/micouy/powierza-distance) instead of Levenshtein distance.
+
+
 ## `0.2.2` - 2021-05-21
 
 ### Add
