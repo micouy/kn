@@ -15,23 +15,24 @@ pub struct Abbr {
 }
 
 impl Abbr {
-    /// Constructs [`AbbrInner::Literal`](AbbrInner::Literal) with the
-    /// abbreviation mapped to its ASCII lowercase equivalent.
-    fn literal(abbr: &str) -> Self {
-        Self {
-            inner: AbbrInner::Literal(abbr.to_ascii_lowercase()),
-        }
-    }
-
-    /// Constructs [`AbbrInner::Wildcard`](AbbrInner::Wildcard).
-    fn wildcard() -> Self {
-        Self {
-            inner: AbbrInner::Wildcard,
+    /// Constructs wrapped [`AbbrInner::Wildcard`](AbbrInner::Wildcard) if the
+    /// string slice is '-', otherwise constructs
+    /// wrapped [`AbbrInner::Literal`](AbbrInner::Literal) with the abbreviation
+    /// mapped to its ASCII lowercase equivalent.
+    pub fn from_str(abbr: &str) -> Self {
+        if abbr == "-" {
+            Self {
+                inner: AbbrInner::Wildcard,
+            }
+        } else {
+            Self {
+                inner: AbbrInner::Literal(abbr.to_ascii_lowercase()),
+            }
         }
     }
 
     /// Compares a component against the abbreviation.
-    fn compare(&self, component: &str) -> Option<Congruence> {
+    pub fn compare(&self, component: &str) -> Option<Congruence> {
         self.inner.compare(component)
     }
 }
@@ -148,7 +149,7 @@ mod test {
 
     #[test]
     fn test_compare_abbr() {
-        let abbr = Abbr::literal("abcjkl");
+        let abbr = Abbr::from_str("abcjkl");
 
         assert_variant!(abbr.compare("abcjkl"), Some(Complete));
         assert_variant!(abbr.compare("abcjkl_"), Some(Prefix));
@@ -161,7 +162,7 @@ mod test {
 
     #[test]
     fn test_compare_abbr_different_cases() {
-        let abbr = Abbr::literal("AbCjKl");
+        let abbr = Abbr::from_str("AbCjKl");
 
         assert_variant!(abbr.compare("aBcJkL"), Some(Complete));
         assert_variant!(abbr.compare("AbcJkl_"), Some(Prefix));
@@ -172,7 +173,7 @@ mod test {
     #[test]
     fn test_order_paths() {
         fn sort<'a>(paths: &'a Vec<&'a str>, abbr: &str) -> Vec<&'a str> {
-            let abbr = Abbr::literal(abbr);
+            let abbr = Abbr::from_str(abbr);
             let mut paths = paths.clone();
             paths.sort_by_key(|path| abbr.compare(path).unwrap());
 

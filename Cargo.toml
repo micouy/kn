@@ -29,6 +29,7 @@ path = "src/main.rs"
 
 [dependencies]
 alphanumeric-sort = "1.4"
+thiserror = "1.0"
 powierza-distance = { git = "https://github.com/micouy/powierza-distance", rev = "b6eda77" }
 
 [dev-dependencies]
