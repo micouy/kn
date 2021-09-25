@@ -1,11 +1,10 @@
 imports_layout = "HorizontalVertical"
 max_width = 80
-# comment_width = 60
+comment_width = 80
 normalize_comments = false
 match_arm_blocks = false
 wrap_comments = true
 blank_lines_upper_bound = 1
-merge_imports = true
 report_fixme = "Always"
 report_todo = "Always"
 use_field_init_shorthand = true
