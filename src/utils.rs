@@ -1,5 +1,7 @@
 //! Utils.
 
+use std::{convert::AsRef, path::Path};
+
 /// Asserts that the expression matches the variant. Optionally returns a value.
 ///
 /// Inspired by [`std::matches`](https://doc.rust-lang.org/stable/std/macro.matches.html).
@@ -34,4 +36,11 @@ macro_rules! assert_variant {
             _ => panic!($panic),
         }
     };
+}
+
+pub fn as_path<P>(path: &P) -> &Path
+where
+    P: AsRef<Path> + ?Sized,
+{
+    path.as_ref()
 }

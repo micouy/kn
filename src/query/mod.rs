@@ -13,14 +13,20 @@ use std::{
 
 use alphanumeric_sort::compare_os_str;
 
-#[derive(Debug)]
+/// A path matching an abbreviation.
+///
+/// Stores [`Congruence`](Congruence)'s of its ancestors, with that of the
+/// closest ancestors first (so that it can be compared
+/// [lexicographically](std::cmp::Ord#lexicographical-comparison).#
+/// [derive(Debug)]
 struct Finding {
     file_name: OsString,
     path: PathBuf,
     congruence: Vec<Congruence>,
 }
 
-fn dig<'a, P>(
+/// Returns an interator over directory's children matching the abbreviation.
+fn get_matching_children<'a, P>(
     path: &'a P,
     abbr: &'a Abbr,
     parent_congruence: &'a [Congruence],
@@ -61,6 +67,11 @@ where
         .flatten()
 }
 
+/// The `query` subcommand.
+///
+/// The provided arg gets split into a prefix and [`Abbr`](Abbr)'s.
+/// The prefix is the path where the search starts. See
+/// [`extract_prefix`](extract_prefix).
 pub fn query(arg: OsString) -> Result<PathBuf, Error> {
     let (prefix, abbrs) = parse_arg(&arg)?;
     let start_dir = match prefix {
@@ -72,13 +83,20 @@ pub fn query(arg: OsString) -> Result<PathBuf, Error> {
         [] => Ok(start_dir),
         [first_abbr, abbrs @ ..] => {
             let mut current_level =
-                dig(&start_dir, first_abbr, &[]).collect::<Vec<_>>();
+                get_matching_children(&start_dir, first_abbr, &[])
+                    .collect::<Vec<_>>();
             let mut next_level = vec![];
 
             for abbr in abbrs {
                 let children = current_level
                     .iter()
-                    .map(|parent| dig(&parent.path, abbr, &parent.congruence))
+                    .map(|parent| {
+                        get_matching_children(
+                            &parent.path,
+                            abbr,
+                            &parent.congruence,
+                        )
+                    })
                     .flatten();
 
                 next_level.clear();
@@ -106,6 +124,11 @@ pub fn query(arg: OsString) -> Result<PathBuf, Error> {
     }
 }
 
+/// Checks if the component contains only dots and returns the equivalent number
+/// of [`ParentDir`](Component::ParentDir) components if it does.
+///
+/// It is the number of dots, less one. For example, `...` is converted to
+/// `../..`, `....` to `../../..` etc.
 fn parse_dots(component: &str) -> Option<usize> {
     component
         .chars()
@@ -116,6 +139,19 @@ fn parse_dots(component: &str) -> Option<usize> {
         .and_then(|n_dots| if n_dots > 1 { Some(n_dots - 1) } else { None })
 }
 
+/// Extracts leading components of the path that are not parts of the
+/// abbreviation.
+///
+/// The prefix is the path where the search starts. If there is no prefix (when
+/// the path consists only of normal components), the search starts in the
+/// current directory, just as you'd expect. The function collects each
+/// [`Prefix`](Component::Prefix), [`RootDir`](Component::RootDir),
+/// [`CurDir`](Component::CurDir), and [`ParentDir`](Component::ParentDir)
+/// components and stops at the first [`Normal`] component **unless** it only
+/// contains dots. In this case, it converts it to as many
+/// [`ParentDir`](Component::ParentDir)'s as there are dots in this component,
+/// less one. For example, `...` is converted to `../..`, `....` to `../../..`
+/// etc.
 fn extract_prefix<'a, P>(
     arg: &'a P,
 ) -> Result<(Option<PathBuf>, impl Iterator<Item = Component<'a>> + 'a), Error>
@@ -157,6 +193,10 @@ where
     Ok((prefix, components))
 }
 
+/// Converts each component into [`Abbr`](Abbr) without checking
+/// the component's type.
+///
+/// This may change in the future.
 fn parse_abbrs<'a, I>(abbrs: I) -> Result<Vec<Abbr>, Error>
 where
     I: Iterator<Item = Component<'a>> + 'a,
@@ -173,6 +213,7 @@ where
         .collect::<Result<Vec<_>, _>>()
 }
 
+/// Parses the provided argument into a prefix and [`Abbr`](Abbr)'s.
 fn parse_arg<P>(arg: &P) -> Result<(Option<PathBuf>, Vec<Abbr>), Error>
 where
     P: AsRef<Path>,
