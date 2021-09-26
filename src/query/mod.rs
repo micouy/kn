@@ -17,8 +17,7 @@ use alphanumeric_sort::compare_os_str;
 ///
 /// Stores [`Congruence`](Congruence)'s of its ancestors, with that of the
 /// closest ancestors first (so that it can be compared
-/// [lexicographically](std::cmp::Ord#lexicographical-comparison).#
-/// [derive(Debug)]
+/// [lexicographically](std::cmp::Ord#lexicographical-comparison).
 struct Finding {
     file_name: OsString,
     path: PathBuf,
