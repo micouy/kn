@@ -10,4 +10,8 @@ mod error;
 mod query;
 
 #[allow(missing_docs)]
-fn main() {}
+fn main() {
+    let abbr = std::env::args_os().nth(1).unwrap();
+
+    dbg!(query::query(abbr).unwrap());
+}

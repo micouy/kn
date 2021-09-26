@@ -1,10 +1,65 @@
-use crate::{abbr::Abbr, error::Error};
+use crate::{
+    abbr::{Abbr, Congruence},
+    error::Error,
+};
 
 use std::{
     convert::AsRef,
     ffi::{OsStr, OsString},
+    fs::DirEntry,
+    mem,
     path::{Component, Path, PathBuf},
 };
+
+use alphanumeric_sort::compare_os_str;
+
+#[derive(Debug)]
+struct Finding {
+    file_name: OsString,
+    path: PathBuf,
+    congruence: Vec<Congruence>,
+}
+
+fn dig<'a, P>(
+    path: &'a P,
+    abbr: &'a Abbr,
+    parent_congruence: &'a [Congruence],
+) -> impl Iterator<Item = Finding> + 'a
+where
+    P: AsRef<Path>,
+{
+    let filter_map_entry = move |entry: DirEntry| {
+        let file_type = entry.file_type().ok()?;
+
+        if file_type.is_dir() || file_type.is_symlink() {
+            let file_name: String = entry.file_name().into_string().ok()?;
+
+            if let Some(congruence) = abbr.compare(&file_name) {
+                let mut entry_congruence = parent_congruence.to_vec();
+                entry_congruence.insert(0, congruence);
+
+                return Some(Finding {
+                    file_name: entry.file_name(),
+                    congruence: entry_congruence,
+                    path: entry.path(),
+                });
+            }
+        }
+
+        None
+    };
+
+    path.as_ref()
+        .read_dir()
+        .ok()
+        .map(|reader| {
+            reader
+                .filter_map(|entry| entry.ok())
+                .filter_map(filter_map_entry)
+        })
+        .into_iter()
+        .flatten()
+}
 
 pub fn query(arg: OsString) -> Result<PathBuf, Error> {
     let (prefix, abbrs) = parse_arg(&arg)?;
@@ -13,7 +68,42 @@ pub fn query(arg: OsString) -> Result<PathBuf, Error> {
         None => std::env::current_dir()?,
     };
 
-    todo!("search the file system")
+    match abbrs.as_slice() {
+        [] => Ok(start_dir),
+        [first_abbr, abbrs @ ..] => {
+            let mut current_level =
+                dig(&start_dir, first_abbr, &[]).collect::<Vec<_>>();
+            let mut next_level = vec![];
+
+            for abbr in abbrs {
+                let children = current_level
+                    .iter()
+                    .map(|parent| dig(&parent.path, abbr, &parent.congruence))
+                    .flatten();
+
+                next_level.clear();
+                next_level.extend(children);
+
+                mem::swap(&mut next_level, &mut current_level);
+            }
+
+            let current_level: Vec<_> = current_level;
+
+            let found_path = current_level
+                .into_iter()
+                .min_by(|finding_a, finding_b| {
+                    finding_a.congruence.cmp(&finding_b.congruence).then(
+                        compare_os_str(
+                            &finding_a.file_name,
+                            &finding_b.file_name,
+                        ),
+                    )
+                })
+                .map(|Finding { path, .. }| path);
+
+            found_path.ok_or(Error::PathNotFound)
+        }
+    }
 }
 
 fn parse_dots(component: &str) -> Option<usize> {
