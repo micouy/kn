@@ -30,6 +30,7 @@ path = "src/main.rs"
 [dependencies]
 alphanumeric-sort = "1.4"
 thiserror = "1.0"
+pico-args = { version = "0.4", features = [] }
 powierza-distance = { git = "https://github.com/micouy/powierza-distance", rev = "b6eda77" }
 
 [dev-dependencies]

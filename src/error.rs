@@ -10,4 +10,10 @@ pub enum Error {
 
     #[error("Path not found.")]
     PathNotFound,
+
+    #[error("Value of arg `{0}` is invalid.")]
+    InvalidArgValue(String),
+
+    #[error(transparent)]
+    Args(#[from] pico_args::Error),
 }

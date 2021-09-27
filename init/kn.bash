@@ -3,17 +3,7 @@
 
 function kn() {
     if [[ "$#" -eq 0 ]]; then
-        # no args provided, search in interactive mode
-
-        \builtin local __result_file
-        __result_file="`mktemp`"
-
-        \builtin echo "`exa $__result_file`"
-
-        _kn interactive "$__result_file" && \builtin cd "`cat $__result_file`"
-
-        rm -f $__result_file
-        \builtin echo "`exa $__result_file`"
+        # no args provided, do nothing
     elif [[ "$#" -eq 1 ]] && [[ "$1" = '-' ]]; then
         # only dash provided, go to previous location if it exists
 
@@ -23,7 +13,6 @@ function kn() {
     else
         # otherwise, query _kn
 
-        export RUST_LOG=0
         \builtin local __kn_result
         __kn_result="$(_kn query "$@")" && \builtin cd "${__kn_result}"
     fi

@@ -38,6 +38,7 @@ name = "kn"
 version = "0.2.2"
 dependencies = [
  "alphanumeric-sort",
+ "pico-args",
  "powierza-distance",
  "pretty_assertions",
  "thiserror",
@@ -51,6 +52,12 @@ checksum = "53cdc5b785b7a58c5aad8216b3dfa114df64b0b06ae6e1501cef91df2fbdf8f9"
 dependencies = [
  "winapi",
 ]
+
+[[package]]
+name = "pico-args"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db8bcd96cb740d03149cbad5518db9fd87126a10ab519c011893b1754134c468"
 
 [[package]]
 name = "powierza-distance"

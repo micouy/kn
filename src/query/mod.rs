@@ -71,7 +71,10 @@ where
 /// The provided arg gets split into a prefix and [`Abbr`](Abbr)'s.
 /// The prefix is the path where the search starts. See
 /// [`extract_prefix`](extract_prefix).
-pub fn query(arg: OsString) -> Result<PathBuf, Error> {
+pub fn query<P>(arg: &P) -> Result<PathBuf, Error>
+where
+    P: AsRef<Path>,
+{
     let (prefix, abbrs) = parse_arg(&arg)?;
     let start_dir = match prefix {
         Some(start_dir) => start_dir,
