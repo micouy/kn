@@ -71,7 +71,7 @@ where
 /// The provided arg gets split into a prefix and [`Abbr`](Abbr)'s.
 /// The prefix is the path where the search starts. See
 /// [`extract_prefix`](extract_prefix).
-pub fn query<P>(arg: &P) -> Result<PathBuf, Error>
+pub fn query<P>(arg: &P, excluded: Option<PathBuf>) -> Result<PathBuf, Error>
 where
     P: AsRef<Path>,
 {
@@ -107,19 +107,24 @@ where
                 mem::swap(&mut next_level, &mut current_level);
             }
 
-            let current_level: Vec<_> = current_level;
+            let cmp_findings = |finding_a: &Finding, finding_b: &Finding| {
+                finding_a.congruence.cmp(&finding_b.congruence).then(
+                    compare_os_str(&finding_a.file_name, &finding_b.file_name),
+                )
+            };
 
-            let found_path = current_level
-                .into_iter()
-                .min_by(|finding_a, finding_b| {
-                    finding_a.congruence.cmp(&finding_b.congruence).then(
-                        compare_os_str(
-                            &finding_a.file_name,
-                            &finding_b.file_name,
-                        ),
-                    )
-                })
-                .map(|Finding { path, .. }| path);
+            let found_path = if let Some(excluded) = excluded {
+                current_level
+                    .into_iter()
+                    .filter(|finding| finding.path != excluded)
+                    .min_by(cmp_findings)
+                    .map(|Finding { path, .. }| path)
+            } else {
+                current_level
+                    .into_iter()
+                    .min_by(cmp_findings)
+                    .map(|Finding { path, .. }| path)
+            };
 
             found_path.ok_or(Error::PathNotFound)
         }

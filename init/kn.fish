@@ -13,7 +13,7 @@ function kn
     else
         # otherwise, query _kn
 
-        set -l __kn_result (command _kn query $argv)
+        set -l __kn_result (command {query_command})
 
         and if test -d "$__kn_result"
             cd "$__kn_result"

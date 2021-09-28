@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 #![feature(pattern)]
+#![feature(never_type)]
 
 //! Alternative to `cd`. Navigate by typing abbreviations of paths.
 
@@ -33,19 +34,24 @@ fn _main() -> Result<(), Error> {
     let subcommand = args::parse_args()?;
 
     match subcommand {
-        Subcommand::Init { shell } => {
-            let script = init::init(shell);
+        Subcommand::Init {
+            shell,
+            exclude_old_pwd,
+        } => {
+            let script = init::init(shell, exclude_old_pwd);
             print!("{}", script);
 
             Ok(())
         }
-        Subcommand::Query { abbr } => match query::query(&abbr) {
-            Err(error) => Err(error),
-            Ok(path) => {
-                println!("{}", path.display());
+        Subcommand::Query { abbr, excluded } => {
+            match query::query(&abbr, excluded) {
+                Err(error) => Err(error),
+                Ok(path) => {
+                    println!("{}", path.display());
 
-                Ok(())
+                    Ok(())
+                }
             }
-        },
+        }
     }
 }
