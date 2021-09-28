@@ -113,7 +113,7 @@ where
                 )
             };
 
-            let found_path = if let Some(excluded) = excluded {
+            let found_path = if let Some(excluded) = excluded && current_level.len() > 1 {
                 current_level
                     .into_iter()
                     .filter(|finding| finding.path != excluded)
