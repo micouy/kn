@@ -75,6 +75,15 @@ pub fn query<P>(arg: &P, excluded: Option<PathBuf>) -> Result<PathBuf, Error>
 where
     P: AsRef<Path>,
 {
+    // If the arg is a real path and not an abbreviation, return it. It
+    // prevents potential unexpected behavior due to abbreviation expansion.
+    // For example, `kn` doesn't allow for any component other than `Normal` in
+    // the abbreviation but the arg itself may be a valid path. `kn` should only
+    // behave differently from `cd` in situations where `cd` would fail.
+    if arg.as_ref().is_dir() {
+        return Ok(arg.as_ref().into());
+    }
+
     let (prefix, abbrs) = parse_arg(&arg)?;
     let start_dir = match prefix {
         Some(start_dir) => start_dir,
@@ -113,17 +122,16 @@ where
                 )
             };
 
-            let found_path = if let Some(excluded) = excluded && current_level.len() > 1 {
-                current_level
+            let found_path = match excluded {
+                Some(excluded) if current_level.len() > 1 => current_level
                     .into_iter()
                     .filter(|finding| finding.path != excluded)
                     .min_by(cmp_findings)
-                    .map(|Finding { path, .. }| path)
-            } else {
-                current_level
+                    .map(|Finding { path, .. }| path),
+                _ => current_level
                     .into_iter()
                     .min_by(cmp_findings)
-                    .map(|Finding { path, .. }| path)
+                    .map(|Finding { path, .. }| path),
             };
 
             found_path.ok_or(Error::PathNotFound)
@@ -204,20 +212,33 @@ where
 /// the component's type.
 ///
 /// This may change in the future.
-fn parse_abbrs<'a, I>(abbrs: I) -> Result<Vec<Abbr>, Error>
+fn parse_abbrs<'a, I>(components: I) -> Result<Vec<Abbr>, Error>
 where
     I: Iterator<Item = Component<'a>> + 'a,
 {
-    abbrs
-        .map(|component_os| {
-            component_os
-                .as_os_str()
+    use Component::*;
+
+    let abbrs = components
+        .into_iter()
+        .map(|component| match component {
+            Prefix(_) | RootDir | CurDir | ParentDir => {
+                let component_string = component
+                    .as_os_str()
+                    .to_os_string()
+                    .to_string_lossy()
+                    .to_string();
+
+                Err(Error::UnexpectedAbbrComponent(component_string))
+            }
+            Normal(component_os) => component_os
                 .to_os_string()
                 .into_string()
                 .map_err(|_| Error::NonUnicodeInput)
-                .map(|component| Abbr::from_str(&component))
+                .map(|string| Abbr::from_str(&string)),
         })
-        .collect::<Result<Vec<_>, _>>()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(abbrs)
 }
 
 /// Parses the provided argument into a prefix and [`Abbr`](Abbr)'s.

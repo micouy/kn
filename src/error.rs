@@ -14,6 +14,9 @@ pub enum Error {
     #[error("Value of arg `{0}` is invalid.")]
     InvalidArgValue(String),
 
-    #[error(transparent)]
+    #[error("Invalid command: {0}.")]
     Args(#[from] pico_args::Error),
+
+    #[error("Unexpected abbreviation component `{0}`.")]
+    UnexpectedAbbrComponent(String),
 }
