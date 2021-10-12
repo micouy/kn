@@ -1,5 +1,14 @@
+//! The `init` subcommand.
+
 use crate::args::Shell;
 
+/// The `init` subcommand.
+///
+/// Prints a shell script for initializing `kn`. The script
+/// can be configured. The `init` subcommand takes an arg `--shell`,
+/// specifying the used shell, and a flag `--exclude-old-pwd` which
+/// enables excluding the previous location from the search (only if there
+/// are other matching dirs).
 pub fn init(shell: Shell, exclude_old_pwd: bool) -> String {
     match shell {
         Shell::Fish => {
@@ -10,7 +19,7 @@ pub fn init(shell: Shell, exclude_old_pwd: bool) -> String {
             };
 
             format!(
-                include_str!("../../init/kn.fish"),
+                include_str!("../init/kn.fish"),
                 query_command = query_command
             )
         }
@@ -22,7 +31,7 @@ pub fn init(shell: Shell, exclude_old_pwd: bool) -> String {
             };
 
             format!(
-                include_str!("../../init/kn.zsh"),
+                include_str!("../init/kn.zsh"),
                 query_command = query_command
             )
         }
@@ -34,7 +43,7 @@ pub fn init(shell: Shell, exclude_old_pwd: bool) -> String {
             };
 
             format!(
-                include_str!("../../init/kn.bash"),
+                include_str!("../init/kn.bash"),
                 query_command = query_command
             )
         }

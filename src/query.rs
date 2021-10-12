@@ -1,3 +1,5 @@
+//! The `query` subcommand.
+
 use crate::{
     abbr::{Abbr, Congruence},
     error::Error,
@@ -68,9 +70,10 @@ where
 
 /// The `query` subcommand.
 ///
-/// The provided arg gets split into a prefix and [`Abbr`](Abbr)'s.
-/// The prefix is the path where the search starts. See
-/// [`extract_prefix`](extract_prefix).
+/// It takes two args — `--abbr` and `--exclude` (optionally). The value of
+/// `--abbr` gets split into a prefix containing components like `c:/`, `/`,
+/// `~/`, and dots, and [`Abbr`](Abbr)'s. If there is more than one dir matching
+/// the query, the value of `--exclude` is excluded from the search.
 pub fn query<P>(arg: &P, excluded: Option<PathBuf>) -> Result<PathBuf, Error>
 where
     P: AsRef<Path>,
@@ -162,8 +165,8 @@ fn parse_dots(component: &str) -> Option<usize> {
 /// current directory, just as you'd expect. The function collects each
 /// [`Prefix`](Component::Prefix), [`RootDir`](Component::RootDir),
 /// [`CurDir`](Component::CurDir), and [`ParentDir`](Component::ParentDir)
-/// components and stops at the first [`Normal`] component **unless** it only
-/// contains dots. In this case, it converts it to as many
+/// components and stops at the first [`Normal`](Component::Normal) component
+/// **unless** it only contains dots. In this case, it converts it to as many
 /// [`ParentDir`](Component::ParentDir)'s as there are dots in this component,
 /// less one. For example, `...` is converted to `../..`, `....` to `../../..`
 /// etc.
@@ -234,7 +237,7 @@ where
                 .to_os_string()
                 .into_string()
                 .map_err(|_| Error::NonUnicodeInput)
-                .map(|string| Abbr::from_str(&string)),
+                .map(|string| Abbr::new_sanitized(&string)),
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -315,7 +318,7 @@ mod test {
         {
             use std::os::windows::prelude::*;
 
-            let source = [0x0066, 0x006f, 0xD800, 0x006f];
+            let source = [0x0066, 0x006f, 0xd800, 0x006f];
             let os_string = OsString::from_wide(&source[..]);
             let result = parse_arg(&non_unicode_input);
 
