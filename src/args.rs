@@ -1,23 +1,40 @@
+//! Arg parsing.
+
 use std::path::PathBuf;
 
 use crate::error::Error;
 
+/// Subcommand with its args.
 #[derive(Debug)]
 pub enum Subcommand {
+    /// The [`init`](crate::init::init) subcommand.
     Init {
+        /// User's shell.
         shell: Shell,
+
+        /// The value of the `--exclude-old-pwd` flag.
         exclude_old_pwd: bool,
     },
+    /// The [`query`](crate::query::query) subcommand.
     Query {
+        /// The abbr.
         abbr: String,
+
+        /// Path excluded from search.
         excluded: Option<PathBuf>,
     },
 }
 
+/// The value of the `--shell` arg.
 #[derive(Debug)]
 pub enum Shell {
+    #[allow(missing_docs)]
     Fish,
+
+    #[allow(missing_docs)]
     Zsh,
+
+    #[allow(missing_docs)]
     Bash,
 }
 
@@ -32,6 +49,7 @@ const ZSH_ARG: &str = "zsh";
 const INIT_SUBCOMMAND: &str = "init";
 const QUERY_SUBCOMMAND: &str = "query";
 
+/// Parses CLI args.
 pub fn parse_args() -> Result<Subcommand, Error> {
     let mut pargs = pico_args::Arguments::from_env();
 

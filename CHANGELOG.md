@@ -10,6 +10,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0
 - Compare abbreviations and strings using [Powierża coefficient](https://github.com/micouy/powierza-coefficient) instead of Levenshtein distance.
 - Add `--exclude-old-pwd` flag to `_kn init`.
 - Remove interactive mode.
+- Add extensive docs.
 
 
 ## `0.2.2` - 2021-05-21

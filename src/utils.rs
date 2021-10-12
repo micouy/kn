@@ -1,5 +1,6 @@
 //! Utils.
 
+#[cfg(any(test, doc))]
 use std::{convert::AsRef, path::Path};
 
 /// Asserts that the expression matches the variant. Optionally returns a value.
@@ -12,7 +13,7 @@ use std::{convert::AsRef, path::Path};
 /// # fn main() -> Option<()> {
 /// use kn::Congruence::*;
 ///
-/// let abbr = Abbr::literal("abcjkl")?;
+/// let abbr = Abbr::new_sanitized("abcjkl");
 /// let coeff_1 = assert_variant!(abbr.compare("abc_jkl"), Some(Subsequence(coeff)) => coeff);
 /// let coeff_2 = assert_variant!(abbr.compare("ab_cj_kl"), Some(Subsequence(coeff)) => coeff);
 /// assert!(coeff_1 < coeff_2);
@@ -38,6 +39,8 @@ macro_rules! assert_variant {
     };
 }
 
+/// Shorthand for `AsRef<Path>::as_ref(&x)`.
+#[cfg(any(test, doc))]
 pub fn as_path<P>(path: &P) -> &Path
 where
     P: AsRef<Path> + ?Sized,

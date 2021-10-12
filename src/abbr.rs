@@ -7,42 +7,12 @@ use std::{
 
 use powierza_coefficient::powierża_coefficient;
 
-/// A wrapper type around [`AbbrInner`](AbbrInner) exposing only safe
-/// constructors.
-#[derive(Debug, Clone)]
-pub struct Abbr {
-    inner: AbbrInner,
-}
-
-impl Abbr {
-    /// Constructs wrapped [`AbbrInner::Wildcard`](AbbrInner::Wildcard) if the
-    /// string slice is '-', otherwise constructs
-    /// wrapped [`AbbrInner::Literal`](AbbrInner::Literal) with the abbreviation
-    /// mapped to its ASCII lowercase equivalent.
-    pub fn from_str(abbr: &str) -> Self {
-        if abbr == "-" {
-            Self {
-                inner: AbbrInner::Wildcard,
-            }
-        } else {
-            Self {
-                inner: AbbrInner::Literal(abbr.to_ascii_lowercase()),
-            }
-        }
-    }
-
-    /// Compares a component against the abbreviation.
-    pub fn compare(&self, component: &str) -> Option<Congruence> {
-        self.inner.compare(component)
-    }
-}
-
 /// A component of the user's query.
 ///
 /// It is used in comparing and ordering of found paths. Read more in
 /// [`Congruence`'s docs](Congruence).
 #[derive(Debug, Clone)]
-enum AbbrInner {
+pub enum Abbr {
     /// Wildcard matches every component with congruence
     /// [`Complete`](Congruence::Complete).
     Wildcard,
@@ -51,15 +21,27 @@ enum AbbrInner {
     Literal(String),
 }
 
-impl AbbrInner {
+impl Abbr {
+    /// Constructs [`Abbr::Wildcard`](Abbr::Wildcard) if the
+    /// string slice is '-', otherwise constructs
+    /// wrapped [`Abbr::Literal`](Abbr::Literal) with the abbreviation
+    /// mapped to its ASCII lowercase equivalent.
+    pub fn new_sanitized(abbr: &str) -> Self {
+        if abbr == "-" {
+            Self::Wildcard
+        } else {
+            Self::Literal(abbr.to_ascii_lowercase())
+        }
+    }
+
     /// Compares a component against the abbreviation.
-    fn compare(&self, component: &str) -> Option<Congruence> {
+    pub fn compare(&self, component: &str) -> Option<Congruence> {
         // What about characters with accents? [https://eev.ee/blog/2015/09/12/dark-corners-of-unicode/]
         let component = component.to_ascii_lowercase();
 
         match self {
-            AbbrInner::Wildcard => Some(Congruence::Complete),
-            AbbrInner::Literal(literal) =>
+            Self::Wildcard => Some(Congruence::Complete),
+            Self::Literal(literal) =>
                 if *literal == component {
                     Some(Congruence::Complete)
                 } else if literal.is_prefix_of(&component) {
@@ -102,7 +84,8 @@ pub enum Congruence {
     Prefix,
 
     /// The abbreviation's characters form a subsequence of the component's
-    /// characters. The field contains the Powierża coefficient of the pair of strings.
+    /// characters. The field contains the Powierża coefficient of the pair of
+    /// strings.
     Subsequence(u32),
 }
 
@@ -148,7 +131,7 @@ mod test {
 
     #[test]
     fn test_compare_abbr() {
-        let abbr = Abbr::from_str("abcjkl");
+        let abbr = Abbr::new_sanitized("abcjkl");
 
         assert_variant!(abbr.compare("abcjkl"), Some(Complete));
         assert_variant!(abbr.compare("abcjkl_"), Some(Prefix));
@@ -161,7 +144,7 @@ mod test {
 
     #[test]
     fn test_compare_abbr_different_cases() {
-        let abbr = Abbr::from_str("AbCjKl");
+        let abbr = Abbr::new_sanitized("AbCjKl");
 
         assert_variant!(abbr.compare("aBcJkL"), Some(Complete));
         assert_variant!(abbr.compare("AbcJkl_"), Some(Prefix));
@@ -172,7 +155,7 @@ mod test {
     #[test]
     fn test_order_paths() {
         fn sort<'a>(paths: &'a Vec<&'a str>, abbr: &str) -> Vec<&'a str> {
-            let abbr = Abbr::from_str(abbr);
+            let abbr = Abbr::new_sanitized(abbr);
             let mut paths = paths.clone();
             paths.sort_by_key(|path| abbr.compare(path).unwrap());
 

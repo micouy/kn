@@ -7,17 +7,17 @@
 use std::process::exit;
 
 #[macro_use]
-mod utils;
-mod abbr;
-mod args;
-mod error;
+pub mod utils;
+pub mod abbr;
+pub mod args;
+pub mod error;
 
-mod init;
-mod query;
+pub mod init;
+pub mod query;
 
 use crate::{args::Subcommand, error::Error};
 
-#[allow(missing_docs)]
+/// A wrapper around the main function.
 fn main() {
     match _main() {
         Err(err) => {
@@ -31,6 +31,7 @@ fn main() {
     }
 }
 
+/// The main function.
 fn _main() -> Result<(), Error> {
     let subcommand = args::parse_args()?;
 
