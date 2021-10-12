@@ -13,45 +13,16 @@
 cargo install kn
 ```
 
-Then follow [the installation instructions](#installation).
+Then follow the [configuration instructions](#configuring-your-shell).
 
 
 # Features
 
-* [Interactive mode](#interactive-mode)
-* [Normal mode](#normal-mode)
-  * [Abbreviations](#abbreviations)
-  * [Wildcards](#wildcards)
-  * [Multiple dots](#multiple-dots)
+* [Abbreviations](#abbreviations)
+* [Wildcards](#wildcards)
+* [Multiple dots](#multiple-dots)
 
-## Interactive mode
-
-**Enter interactive mode**
-```bash
-$ kn
-```
-
-**Filter suggestions by typing**
-
-![demo](assets/filter.gif)
-
-**Select with <kbd>Tab</kbd> and <kbd>Shift</kbd> + <kbd>Tab</kbd>**
-
-You can also use <kbd>Ctrl</kbd> + <kbd>hjkl</kbd>.
-
-![demo](assets/select.gif)
-
-**Enter dir with <kbd>/</kbd>**
-
-![demo](assets/enter-dir.gif)
-
-<kbd>Backspace</kbd> removes whole components until it reaches current dir.
-
-To change dir, press <kbd>Enter</kbd>. Note that `kn` enters currently selected suggestion, not the path displayed in gray. This may change in the future.
-
-## Normal mode
-
-### Abbreviations
+## Abbreviations
 
 You can use `kn` just like you'd use `cd`. The difference is that you can search with abbreviations instead of full dir names. **For example, instead of `foo/bar` you can type `fo/ba`.**
 
@@ -70,7 +41,7 @@ $ kn fo/br            # ...or navigate with abbreviations! No asterisks required
 $ kn pho2021          # Type only the significant parts of the dir name. You can skip the middle part.
 ```
 
-### Wildcards
+## Wildcards
 
 You can also use wildcards `-` to avoid typing a dir name altogether i.e. kn `-/beta` to go to `alpha/beta`. Note that `kn alph-/bet-` will not match `alhpa/beta`. In this case `-` functions as a literal character.
 
@@ -78,7 +49,7 @@ You can also use wildcards `-` to avoid typing a dir name altogether i.e. kn `-/
 $ kn -/bar            # Wildcards can be used to skip a dir name altogether (changes dir to ./foo/bar/).
 ```
 
-### Multiple dots
+## Multiple dots
 
 You can use more than two dots in each component of the prefix:
 
@@ -151,6 +122,7 @@ Download a binary of the [latest release](https://github.com/micouy/kn/releases/
 
 If there are any problems with the pre-compiled binaries, file an issue.
 
+
 ## Configuring your shell
 
 Then add this line to the config of your shell (notice the underscore in `_kn`):
@@ -180,28 +152,12 @@ In this project I have entered a lot of areas I have little knowledge about. Con
 
 # The algorithm
 
-`kn` doesn't track frecency or any other statistics. It searches the disk for paths matching the abbreviation. If it finds many matching paths with the same number of components it orders them in such a way:
+`kn` doesn't track frecency or any other statistics. It searches the disk for paths matching the abbreviation. If it finds multiple matching paths, it orders them in such a way:
 
-1. Complete matches before partial matches. All matches by wildcards are equal. There can't be a wildcard and a complete/partial match at the same depth.
-2. Partial matches with smaller Levenshtein distance first.
-3. The first component (the component at the smallest depth) is the most significant and so on.
-
-Running `kn a/-/b` on paths below returns them in the following order:
-
-```
-apple/x/b      Partial(4) / Wildcard / Complete      1.
-               =            =          !=
-apple/y/bee    Partial(4) / Wildcard / Partial(_)    2.
-```
-
-```
-apple/x/bo     Partial(4) / Wildcard / Partial(1)    1.
-               =            =          !=
-apple/y/bee    Partial(4) / Wildcard / Partial(2)    2.
-```
-
-```
-a/x/bo         Complete   / Wildcard / Partial(1)    1.
-               !=           -          -
-apple/y/b      Partial(4) / Wildcard / Complete      2.
-```
+1. Compare each component against the corresponding component of the abbreviation. The components of the path may or may not match the abbreviation. If a component matches the abbreviation, there are three possible results:
+   - `Complete` if the corresponding components are equal.
+   - `Prefix` if the abbreviation's component is a prefix of the path's component.
+   - `Subsequence(coefficient)` if the abbreviation's component is a subsequence of the path's component. The `coefficient` is the *Powierża coefficient* of these strings.
+   Retain only these paths in which all of the components match.
+2. Order the paths in reverse lexicographical order (compare the results from right to left). `Complete` then `Prefix` then `Subsequence`. Order paths with `Subsequence` result in ascending order of their `coefficient`'s.
+3. Order paths with the same results with [`alphanumeric_sort::compare_os_str`](https://docs.rs/alphanumeric-sort/1.4.3/alphanumeric_sort/fn.compare_os_str.html).
