@@ -22,6 +22,7 @@ fn main() {
     match _main() {
         Err(err) => {
             eprintln!("{}", err);
+
             exit(1);
         }
         Ok(()) => {

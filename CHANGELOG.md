@@ -7,7 +7,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0
 
 - Check if arg is a valid path before attempting abbreviation expansion.
 - Simplify `Congruence`.
-- Compare abbreviations and strings using [Powierża distance](https://github.com/micouy/powierza-distance) instead of Levenshtein distance.
+- Compare abbreviations and strings using [Powierża coefficient](https://github.com/micouy/powierza-coefficient) instead of Levenshtein distance.
 - Add `--exclude-old-pwd` flag to `_kn init`.
 - Remove interactive mode.
 

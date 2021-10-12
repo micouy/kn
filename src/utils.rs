@@ -13,9 +13,9 @@ use std::{convert::AsRef, path::Path};
 /// use kn::Congruence::*;
 ///
 /// let abbr = Abbr::literal("abcjkl")?;
-/// let distance_1 = assert_variant!(abbr.compare("abc_jkl"), Some(Subsequence(distance)) => distance);
-/// let distance_2 = assert_variant!(abbr.compare("ab_cj_kl"), Some(Subsequence(distance)) => distance);
-/// assert!(distance_1 < distance_2);
+/// let coeff_1 = assert_variant!(abbr.compare("abc_jkl"), Some(Subsequence(coeff)) => coeff);
+/// let coeff_2 = assert_variant!(abbr.compare("ab_cj_kl"), Some(Subsequence(coeff)) => coeff);
+/// assert!(coeff_1 < coeff_2);
 /// # Ok(())
 /// # }
 /// ```

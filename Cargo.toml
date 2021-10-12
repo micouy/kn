@@ -31,7 +31,7 @@ path = "src/main.rs"
 alphanumeric-sort = "1.4"
 thiserror = "1.0"
 pico-args = { version = "0.4", features = [] }
-powierza-distance = { git = "https://github.com/micouy/powierza-distance", rev = "b6eda77" }
+powierza-coefficient = { git = "https://github.com/micouy/powierza-coefficient", rev = "3adf3a5" }
 
 [dev-dependencies]
 pretty_assertions = "0.7"

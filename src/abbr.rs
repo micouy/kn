@@ -5,7 +5,7 @@ use std::{
     str::pattern::Pattern,
 };
 
-use powierza_distance::powierża_distance;
+use powierza_coefficient::powierża_coefficient;
 
 /// A wrapper type around [`AbbrInner`](AbbrInner) exposing only safe
 /// constructors.
@@ -65,7 +65,7 @@ impl AbbrInner {
                 } else if literal.is_prefix_of(&component) {
                     Some(Congruence::Prefix)
                 } else {
-                    powierża_distance(literal, &component)
+                    powierża_coefficient(literal, &component)
                         .map(Congruence::Subsequence)
                 },
         }
@@ -82,7 +82,7 @@ impl AbbrInner {
 /// [`Prefix`](Congruence::Prefix), then
 /// [`Subsequence`](Congruence::Subsequence).
 /// 2. Components with congruence [`Subsequence`](Congruence::Subsequence) are
-/// ordered by their [Powierża distance](https://github.com/micouy/powierza-distance).
+/// ordered by their [Powierża coefficient](https://github.com/micouy/powierza-coefficient).
 /// 3. If the order of two components cannot be determined based on the above, [`alphanumeric_sort`](https://docs.rs/alphanumeric-sort) is used.
 ///
 /// Below are the results of matching components against abbreviation `abc`:
@@ -102,8 +102,7 @@ pub enum Congruence {
     Prefix,
 
     /// The abbreviation's characters form a subsequence of the component's
-    /// characters. The field contains the Powierża distance between these
-    /// sequences.
+    /// characters. The field contains the Powierża coefficient of the pair of strings.
     Subsequence(u32),
 }
 

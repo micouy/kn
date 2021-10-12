@@ -39,7 +39,7 @@ version = "0.2.2"
 dependencies = [
  "alphanumeric-sort",
  "pico-args",
- "powierza-distance",
+ "powierza-coefficient",
  "pretty_assertions",
  "thiserror",
 ]
@@ -60,9 +60,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db8bcd96cb740d03149cbad5518db9fd87126a10ab519c011893b1754134c468"
 
 [[package]]
-name = "powierza-distance"
+name = "powierza-coefficient"
 version = "0.1.0"
-source = "git+https://github.com/micouy/powierza-distance?rev=b6eda77#b6eda776d3098126ba3c9f1f38641f6a330e1481"
+source = "git+https://github.com/micouy/powierza-coefficient?rev=3adf3a5#3adf3a520146ed7dbecebbb4be65a712de42475c"
 
 [[package]]
 name = "pretty_assertions"
