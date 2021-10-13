@@ -9,7 +9,7 @@
 <img src="assets/banner.svg" />
 </p>
 
-```bash
+```fish
 cargo install kn
 ```
 
@@ -22,6 +22,7 @@ Then follow the [configuration instructions](#configuring-your-shell).
 * [Wildcards](#wildcards)
 * [Multiple dots](#multiple-dots)
 * [`--exclude-old-pwd`](#--exclude-old-pwd)
+
 
 ## Abbreviations
 
@@ -36,36 +37,46 @@ You can use `kn` just like you'd use `cd`. The difference is that you can search
 └── photosxxxxxxxxxxx2020
 ```
 
-```bash
-$ kn foo/bar          # Use `kn` just like `cd`...
-$ kn fo/br            # ...or navigate with abbreviations! No asterisks required.
-$ kn pho2021          # Type only the significant parts of the dir name. You can skip the middle part.
+```fish
+kn foo/bar          # Use `kn` just like `cd`...
+kn fo/ba            # ...or navigate with abbreviations! No asterisks required.
+kn pho2021          # Type only the significant parts of the dir name. You can skip the middle part.
 ```
+
 
 ## Wildcards
 
-You can also use wildcards `-` to avoid typing a dir name altogether i.e. kn `-/beta` to go to `alpha/beta`. Note that `kn alph-/bet-` will not match `alhpa/beta`. In this case `-` functions as a literal character.
+You can also use wildcards `-` to avoid typing a dir name altogether i.e. `kn -/ba` to go to `foo/bar`. Note that `kn f-/b-` will not match `foo/bar`. In this case `-` functions as a literal character.
 
-```bash
-$ kn -/bar            # Wildcards can be used to skip a dir name altogether (changes dir to ./foo/bar/).
+```fish
+kn -/bar            # Wildcards can be used to skip a dir name altogether (changes dir to ./foo/bar/).
 ```
+
 
 ## Multiple dots
 
-You can use more than two dots in each component of the prefix:
+`kn` splits the arg into two parts, a prefix and a sequence of abbreviations. The prefix may contain components like `c:/`, `/`, `~/`, `.`, `..` and it is treated as a literal path. It may also contain components with more than two dots, which are interpreted like this:
 
-```bash
-$ kn ..               # Go to parent dir (as usual).
-$ kn ...              # Go to grandparent dir (same as ../..).
-$ kn ....             # Go to grand-grandparent dir (same as ../../..).
+```fish
+kn ..               # Go to parent dir (as usual).
+kn ...              # Go to grandparent dir (same as ../..).
+kn ....             # Go to grand-grandparent dir (same as ../../..).
 
-$ kn ........         # Type as many dots as you want!
-$ kn .../....         # This works as well.
+kn ........         # Type as many dots as you want!
+kn .../....         # This works as well.
 
-$ kn .../..../abbr    # You can put abbreviations after the prefix.
+kn .../..../abbr    # You can put abbreviations after the prefix.
 ```
 
-If any of `.`, `..`, `/`, `~`, `-` occurs in the argument before normal components, it will work just like in `cd` and it won't be interpreted as an abbreviation.
+**If any of the mentioned components occurs in the path after an abbreviation, it is treated as an abbreviation.**
+
+```fish
+kn ./../foo/bar/../baz
+#  ^---^                 prefix
+#       ^------------^   abbreviations
+```
+
+`.` and the first `..` mean *current dir* and *parent dir*, while the second `..` is treated as an abbreviation, that is, it will match a dir name containing two dots.
 
 
 ## `--exclude-old-pwd`
@@ -76,23 +87,38 @@ This flag excludes your previous location from the search. You don't have to typ
 kn init --shell fish --exclude-old-pwd
 ```
 
-`kn` excludes the previous location only if there was at least one other match and if the provided argument is **not** a literal path (that is, when it's an abbreviation of a path).
+It's useful when two paths match your abbreviation and you enter the wrong one:
+
+```fish
+my-files/
+$ kn d
+
+my-files/dir-1/
+$ kn -
+
+my-files/
+$ kn d # just press arrow up twice
+
+my-files/dir-2/
+$ # success!
+```
+
+In order for `kn` to exclude the previous location there must be at least one other match and the provided arg must **not** be a literal path (that is, it must be an abbreviation).
 
 
 # Installation
 
-## Getting the binary
+Make sure to [configure your shell](#configuring-your-shell) after the installation.
 
-Install `kn` from `crates.io`
 
-```bash
+## From `crates.io`
+
+```fish
 cargo install kn
 ```
 
-**OR**
 
-<details>
-<summary>Build binary from source</summary>
+## From source
 
 1. `git clone https://github.com/micouy/kn.git`
 2. `cd kn`
@@ -105,9 +131,9 @@ cargo install kn
    `cargo build --release`
 
    `cp target/release/_kn DIR_IN_PATH`
-</details>
 
-**OR**
+
+## From the release page
 
 Download a binary of the [latest release](https://github.com/micouy/kn/releases/latest) for your OS and move it to a directory which is in your `$PATH`. You may need to change the binary's permissions by running `chmod +x _kn`.
 
