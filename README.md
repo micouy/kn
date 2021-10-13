@@ -6,7 +6,7 @@
 `kn` is an alternative to `cd`. It lets you navigate quickly by typing abbreviations.
 
 <p align="center">
-<img src="assets/demo.svg" />
+<img src="assets/banner.svg" />
 </p>
 
 ```bash
