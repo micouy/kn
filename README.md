@@ -21,6 +21,7 @@ Then follow the [configuration instructions](#configuring-your-shell).
 * [Abbreviations](#abbreviations)
 * [Wildcards](#wildcards)
 * [Multiple dots](#multiple-dots)
+* [`--exclude-old-pwd`](#--exclude-old-pwd)
 
 ## Abbreviations
 
@@ -66,26 +67,16 @@ $ kn .../..../abbr    # You can put abbreviations after the prefix.
 
 If any of `.`, `..`, `/`, `~`, `-` occurs in the argument before normal components, it will work just like in `cd` and it won't be interpreted as an abbreviation.
 
-<details>
-  <summary>See examples</summary>
-  The mentioned components work as usual:
 
-  ```
-  $ kn .
-  $ kn ./abbr
-  $ kn ..
-  $ kn ../..
-  $ kn ../../abbr
+## `--exclude-old-pwd`
 
-  $ kn /
-  $ kn /abbr
+This flag removes your previous location from the search. You can set it like this:
 
-  $ kn ~
-  $ kn ~/abbr
+```fish
+kn init --shell fish --exclude-old-pwd
+```
 
-  $ kn -
-  ```
-</details>
+`kn` removes the previous location only if there were other matches and if the provided path is **not** a literal path (that is, when it's an abbreviation of a path).
 
 
 # Installation
@@ -129,14 +120,14 @@ Then add this line to the config of your shell (notice the underscore in `_kn`):
 
 * **fish** (usually `~/.config/fish/config.fish`):
 
-  `_kn init fish | source`
+  `_kn init --shell fish | source`
 * **bash** (usually `~/.bashrc`):
 
-  `eval "$(_kn init bash)"`
+  `eval "$(_kn init --shell bash)"`
 
 * **zsh** (usually `~/.zshrc`):
 
-  `eval "$(_kn init zsh)"`
+  `eval "$(_kn init --shell zsh)"`
 
 To be able to use `kn`, reload your config or launch a new shell instance.
 
