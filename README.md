@@ -81,10 +81,10 @@ kn ./../foo/bar/../baz
 
 ## `--exclude-old-pwd`
 
-This flag excludes your previous location from the search. You don't have to type it when using `kn`, just set it in your shell script:
+This flag excludes your previous location from the search. You don't have to type it when using `kn`, just set it in your shell script (notice the underscore in `_kn`):
 
 ```fish
-kn init --shell fish --exclude-old-pwd
+_kn init --shell fish --exclude-old-pwd
 ```
 
 It's useful when two paths match your abbreviation and you enter the wrong one:
@@ -155,7 +155,7 @@ Then add this line to the config of your shell (notice the underscore in `_kn`):
 
   `eval "$(_kn init --shell zsh)"`
 
-To be able to use `kn`, reload your config or launch a new shell instance.
+You may also want to enable [the `--exclude-old-pwd` flag](#--exclude-old-pwd). To be able to use `kn`, reload your config or launch a new shell instance.
 
 
 # Help wanted
