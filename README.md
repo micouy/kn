@@ -70,13 +70,13 @@ If any of `.`, `..`, `/`, `~`, `-` occurs in the argument before normal componen
 
 ## `--exclude-old-pwd`
 
-This flag removes your previous location from the search. You can set it like this:
+This flag excludes your previous location from the search. You don't have to type it when using `kn`, just set it in your shell script:
 
 ```fish
 kn init --shell fish --exclude-old-pwd
 ```
 
-`kn` removes the previous location only if there were other matches and if the provided path is **not** a literal path (that is, when it's an abbreviation of a path).
+`kn` excludes the previous location only if there was at least one other match and if the provided argument is **not** a literal path (that is, when it's an abbreviation of a path).
 
 
 # Installation
