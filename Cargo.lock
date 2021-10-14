@@ -61,8 +61,9 @@ checksum = "db8bcd96cb740d03149cbad5518db9fd87126a10ab519c011893b1754134c468"
 
 [[package]]
 name = "powierza-coefficient"
-version = "0.1.0"
-source = "git+https://github.com/micouy/powierza-coefficient?rev=3adf3a5#3adf3a520146ed7dbecebbb4be65a712de42475c"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9caa43783252cf8c4c66dd1cc381a5929cc95f6530da7abd1f9cdb97e2065842"
 
 [[package]]
 name = "pretty_assertions"
