@@ -6,7 +6,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     /// Wrapper around [`std::io::Error`](std::io::Error).
-    #[error("IO error.")]
+    #[error("IO error `{0}`.")]
     IO(#[from] std::io::Error),
 
     /// Non-Unicode input received.
@@ -22,7 +22,7 @@ pub enum Error {
     InvalidArgValue(String),
 
     /// Wrapper around [`pico_args::Error`](pico_args::Error).
-    #[error("Args error: {0}.")]
+    #[error("Args error: `{0}`.")]
     Args(#[from] pico_args::Error),
 
     /// Unexpected abbr component.
