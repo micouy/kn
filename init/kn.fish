@@ -5,7 +5,7 @@ function kn
     set argc (count $argv)
 
     if test $argc -eq 0
-        # no args provided, do nothing
+        exit 0 # no args provided, do nothing
     else if begin; test $argc -eq 1; and test "$argv[1]" = '-'; end
         # only dash provided, go to previous location
 

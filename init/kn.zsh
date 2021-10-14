@@ -3,7 +3,7 @@
 
 function kn() {{
     if [[ "$#" -eq 0 ]]; then
-        # no args provided, do nothing
+        \builtin exit 0 # no args provided, do nothing
     elif [[ "$#" -eq 1 ]] && [[ "$1" = '-' ]]; then
         # only dash provided, go to previous location
 
