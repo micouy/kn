@@ -3,7 +3,7 @@
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
-## `0.3` - Unreleased
+## `0.3` - 2021-10-14
 
 - Check if arg is a valid path before attempting abbreviation expansion.
 - Simplify `Congruence`.
