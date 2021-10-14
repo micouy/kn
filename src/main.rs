@@ -1,6 +1,4 @@
 #![warn(missing_docs)]
-#![feature(pattern)]
-#![feature(never_type)]
 
 //! Alternative to `cd`. Navigate by typing abbreviations of paths.
 

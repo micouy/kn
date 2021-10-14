@@ -1,9 +1,6 @@
 //! Abbreviations.
 
-use std::{
-    cmp::{Ord, Ordering},
-    str::pattern::Pattern,
-};
+use std::cmp::{Ord, Ordering};
 
 use powierza_coefficient::powierża_coefficient;
 
@@ -42,9 +39,11 @@ impl Abbr {
         match self {
             Self::Wildcard => Some(Congruence::Complete),
             Self::Literal(literal) =>
-                if *literal == component {
+                if literal.is_empty() || component.is_empty() {
+                    None
+                } else if *literal == component {
                     Some(Congruence::Complete)
-                } else if literal.is_prefix_of(&component) {
+                } else if component.starts_with(literal) {
                     Some(Congruence::Prefix)
                 } else {
                     powierża_coefficient(literal, &component)
@@ -150,6 +149,17 @@ mod test {
         assert_variant!(abbr.compare("AbcJkl_"), Some(Prefix));
         assert_variant!(abbr.compare("_aBcjKl"), Some(Subsequence(0)));
         assert_variant!(abbr.compare("abC_jkL"), Some(Subsequence(1)));
+    }
+
+    #[test]
+    fn test_empty_abbr_empty_component() {
+        let empty = "";
+
+        let abbr = Abbr::new_sanitized(empty);
+        assert_variant!(abbr.compare("non empty component"), None);
+
+        let abbr = Abbr::new_sanitized("non empty abbr");
+        assert_variant!(abbr.compare(empty), None);
     }
 
     #[test]

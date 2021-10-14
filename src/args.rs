@@ -77,10 +77,10 @@ pub fn parse_args() -> Result<Subcommand, Error> {
         }
         QUERY_SUBCOMMAND => {
             let abbr = pargs.value_from_str(ABBR_ARG)?;
-            let excluded = pargs
-                .opt_value_from_os_str::<_, _, !>(EXCLUDE_ARG, |os_str| {
-                    Ok(PathBuf::from(os_str))
-                })?;
+            let excluded = pargs.opt_value_from_os_str::<_, _, Error>(
+                EXCLUDE_ARG,
+                |os_str| Ok(PathBuf::from(os_str)),
+            )?;
 
             Ok(Subcommand::Query { abbr, excluded })
         }
