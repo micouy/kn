@@ -2,8 +2,12 @@
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## `0.3.1` - 2021-10-16
 
-## `0.3` - 2021-10-14
+- Fix shell scripts so that they don't exit the shell when no args were provided.
+
+
+## `0.3.0` - 2021-10-14 (yanked)
 
 - Check if arg is a valid path before attempting abbreviation expansion.
 - Simplify `Congruence`.
