@@ -175,6 +175,7 @@ In this project I have entered a lot of areas I have little knowledge about. Con
    - `Complete` if the corresponding components are equal.
    - `Prefix` if the abbreviation's component is a prefix of the path's component.
    - `Subsequence(coefficient)` if the abbreviation's component is a subsequence of the path's component. The `coefficient` is the [*Powierża coefficient*](https://github.com/micouy/powierza-coefficient) of these strings.
+   
    Retain only these paths in which all of the components match.
 2. Order the paths in reverse lexicographical order (compare the results from right to left). `Complete` then `Prefix` then `Subsequence`. Order paths with `Subsequence` result in ascending order of their `coefficient`'s.
 3. Order paths with the same results with [`alphanumeric_sort::compare_os_str`](https://docs.rs/alphanumeric-sort/1.4.3/alphanumeric_sort/fn.compare_os_str.html).
