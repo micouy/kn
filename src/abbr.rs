@@ -136,6 +136,7 @@ mod test {
         assert_variant!(abbr.compare("abcjkl_"), Some(Prefix));
         assert_variant!(abbr.compare("_abcjkl"), Some(Subsequence(0)));
         assert_variant!(abbr.compare("abc_jkl"), Some(Subsequence(1)));
+        assert_variant!(abbr.compare("abc____jkl"), Some(Subsequence(1)));
 
         assert_variant!(abbr.compare("xyz"), None);
         assert_variant!(abbr.compare(""), None);
