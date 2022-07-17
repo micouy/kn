@@ -2,6 +2,12 @@
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## `0.3.2` - 2022-07-17
+
+- Fix `--exclude-old-pwd` in `fish`.
+- Update `powierża-coefficient` to `1.0.1`.
+
+
 ## `0.3.1` - 2021-10-16
 
 - Fix shell scripts so that they don't exit the shell when no args were provided.
