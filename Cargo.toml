@@ -27,10 +27,6 @@ keywords = ["cli", "utility", "filesystem"]
 name = "_kn"
 path = "src/main.rs"
 
-[[bin]]
-name = "debug"
-path = "src/debug.rs"
-
 [dependencies]
 alphanumeric-sort = "1.4"
 thiserror = "1.0"
