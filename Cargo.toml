@@ -1,6 +1,6 @@
 [package]
 name = "kn"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2018"
 autobins = false
 include = [
@@ -15,7 +15,7 @@ include = [
 ]
 
 authors = ["micouy"]
-description = "`cd` alternative. Navigate by typing abbreviation of paths."
+description = "nvgt/fldrs/qckly"
 repository = "https://github.com/micouy/kn"
 readme = "README.md"
 license = "MIT"
