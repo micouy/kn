@@ -14,7 +14,7 @@ include = [
     "rustfmt.toml",
 ]
 
-authors = ["micouy <m.powierza@tutanota.com>"]
+authors = ["micouy"]
 description = "`cd` alternative. Navigate by typing abbreviation of paths."
 repository = "https://github.com/micouy/kn"
 readme = "README.md"
@@ -31,7 +31,7 @@ path = "src/main.rs"
 alphanumeric-sort = "1.4"
 thiserror = "1.0"
 pico-args = { version = "0.4", features = [] }
-powierza-coefficient = "1.0.1"
+powierza-coefficient = "1.0.2"
 serde_derive = "1.0"
 serde = "1.0"
 toml = "0.5"

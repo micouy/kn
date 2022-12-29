@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "kn"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "alphanumeric-sort",
  "dirs",
@@ -114,9 +114,9 @@ checksum = "db8bcd96cb740d03149cbad5518db9fd87126a10ab519c011893b1754134c468"
 
 [[package]]
 name = "powierza-coefficient"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64e2c03bca73af2a7a2c021a6b3b4991658b760b2e0a84e3e425a9c9eda2ba7f"
+checksum = "04123079750026568dff0e68efe1ca676f6686023f3bf7686b87dab661c0375b"
 
 [[package]]
 name = "pretty_assertions"
