@@ -5,7 +5,5 @@ normalize_comments = false
 match_arm_blocks = false
 wrap_comments = true
 blank_lines_upper_bound = 1
-report_fixme = "Always"
-report_todo = "Always"
 use_field_init_shorthand = true
 reorder_impl_items = true
